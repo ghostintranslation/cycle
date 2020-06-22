@@ -1,8 +1,8 @@
-#ifndef Device_h
-#define Device_h
+#ifndef Motherboard12_h
+#define Motherboard12_h
 
 /*
- * Device
+ * Motherboard12
  */
 class Motherboard12{
   
