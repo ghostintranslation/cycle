@@ -12,10 +12,12 @@ class Display {
   private:
     Motherboard12 *device;
     DisplayMode currentDisplay;
+    byte cursorIndex = 0;
     elapsedMillis clock_count;
     elapsedMillis clock_count_blink;
     elapsedMillis clock_count_display;
     const byte interval_time = 50;
+    void displaySteps();
     void displayDirection();
     void displayScale();
     void displayAccent();
@@ -25,7 +27,8 @@ class Display {
     void update();
     void setCurrentDisplay(DisplayMode displayMode);
     DisplayMode getCurrentDisplayMode();
-    void displaySteps(byte currentStep);
+    void setCursorIndex(byte index);
+    void keepCurrentDisplay();
 };
 
 
@@ -62,7 +65,8 @@ inline void Display::update() {
       }
     break;
     case Steps:
-//      this->displaySteps();
+    default:
+      this->displaySteps();
     break;
   }
 
@@ -79,7 +83,11 @@ inline void Display::setCurrentDisplay(DisplayMode displayMode) {
 
 inline void Display::displayDirection() {
   this->device->resetDisplay();
-//  this->device->setDisplay(this->selectedVoice, 1);
+
+  for(byte i=0; i<4; i++){
+    this->device->setDisplay(i, 1);
+  }
+  this->device->setDisplay(this->cursorIndex, 2);
 }
 
 inline void Display::displayScale() {
@@ -92,13 +100,20 @@ inline void Display::displayAccent() {
 
 }
 
-inline void Display::displaySteps(byte currentStep){
+inline void Display::displaySteps(){
   this->device->resetDisplay();
-  this->device->setDisplay(currentStep, 5);
+  this->device->setDisplay(cursorIndex, 5);
 }
 
 inline DisplayMode Display::getCurrentDisplayMode(){
   return currentDisplay;
 }
 
+inline void Display::setCursorIndex(byte cursorIndex){
+  this->cursorIndex = cursorIndex;
+}
+
+inline void Display::keepCurrentDisplay(){
+  this->clock_count_display = 0;
+}
 #endif

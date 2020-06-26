@@ -16,8 +16,11 @@ class Sequencer{
     elapsedMillis beatClock;
     enum Direction { Forward, Backward, Pendulum, Transposer };
     Direction direction = Forward;
-    enum Mode { Play, Direction, Scale, Accent };
-    Mode mode = Play;
+    bool pendulumState = true;
+    void iterateDirection();
+    byte getDirectionIndex();
+//    enum Mode { Play, Direction, Scale, Accent };
+//    Mode mode = Play;
     byte tempo = 0;
     Display *display;
     Motherboard12 *device;
@@ -29,7 +32,9 @@ class Sequencer{
     void update();
     byte getCurrentStep();
     void setTempo(byte tempo);
-    void sendMidiNote(byte note);
+    void sendNoteOn(byte note);
+    void sendNoteOff(byte note);
+    void sendStop();
 };
 
 /**
@@ -43,40 +48,58 @@ inline Sequencer::Sequencer(Motherboard12* device){
 
 inline void Sequencer::update(){
   
-  switch(this->mode){
-    case Play:
+  switch(this->display->getCurrentDisplayMode()){
+    case DisplayMode::Steps:
     { // This bracket is to prevent issues with variables declared inside the case
-
+      this->display->setCursorIndex(this->currentStep);
+      
       // Reading buttons to switch mode
       bool directionInput = this->device->getInput(9);
       bool scaleInput = this->device->getInput(10);
       bool accentInput = this->device->getInput(11);
-      if(directionInput){
-        this->mode = Direction;
-      }
-      else if(scaleInput){
-        this->mode = Scale;
-      }
-      else if(accentInput){
-        this->mode = Accent;
+      if(this->bounceClock > 500){
+        if(directionInput){
+          this->display->setCurrentDisplay(DisplayMode::Direction);
+        }
+        else if(scaleInput){
+          this->display->setCurrentDisplay(DisplayMode::Scale);
+        }
+        else if(accentInput){
+          this->display->setCurrentDisplay(DisplayMode::Accent);
+        }
+        this->bounceClock = 0;
       }
 
       // Reading the steps inputs
       for(byte i=0; i<8; i++){
-        this->notes[i] = map(this->device->getInput(i), 0, 1023, 60, 84);
+        unsigned int noteInput = this->device->getInput(i);
+        if(noteInput == 0){
+          this->notes[i] = 0;
+        }else{
+          this->notes[i] = map(this->device->getInput(i), this->device->getAnalogMinValue(), this->device->getAnalogMaxValue(), 60, 84);
+        }
       }
       
       break;
     }
-    case Direction:
+    case DisplayMode::Direction:
     {
+      this->display->setCursorIndex(this->getDirectionIndex());
 //      this->display->setCurrentDisplay(DisplayMode::Direction);
+      bool directionInput = this->device->getInput(9);
+      if(directionInput){
+        if(this->bounceClock > 500){
+          this->iterateDirection();
+          this->display->keepCurrentDisplay();
+          this->bounceClock = 0;
+        }
+      }
       break;
     }
-    case Scale:
+    case DisplayMode::Scale:
 //      this->display->setCurrentDisplay(DisplayMode::Scale);
       break;
-    case Accent:
+    case DisplayMode::Accent:
 //      this->display->setCurrentDisplay(DisplayMode::Accent);
       break;
   }
@@ -100,30 +123,59 @@ inline void Sequencer::update(){
       this->play = !this->play;
       this->currentStep = -1;
       this->bounceClock = 0;
+      if(!this->play){
+        this->sendStop();
+      }
     }
   }
   
-  // Indicating the current step
-  if(this->display->getCurrentDisplayMode() == Steps){
-    this->display->displaySteps(this->currentStep);
-  }
-  
-  
   // Moving steps
   if (this->play && this->tempo > 0 && this->beatClock >= this->timeBetweenSteps) {
-    this->currentStep++;
+    this->sendNoteOff(this->notes[this->currentStep]);
+
+    switch(this->direction){
+      case Forward:
+      default:
+        this->currentStep++;
+        
+        if(this->currentStep == 8){
+          this->currentStep = 0;
+        }
+      break;
+      case Backward:
+        this->currentStep--;
+      break;
+      
+      case Pendulum:
+        if(this->pendulumState){
+          this->currentStep++;
+          if(this->currentStep > 7){
+            this->currentStep = 0;
+            this->pendulumState = !this->pendulumState;
+          }
+        }else{
+          this->currentStep--;
+          if(this->currentStep == 0){
+            this->pendulumState = !this->pendulumState;
+          }
+        }
+      break;
+    }
+    
+    this->currentStep = constrain(this->currentStep, 0, 7);
+    
 
     // Display the tempo
     if(this->currentStep%4 == 0){
       this->device->setDisplay(8, 4);
     }
 
-    if(this->currentStep == 8){
-      this->currentStep = 0;
-    }
-    
+
+
     if(this->notes[this->currentStep] > 0){
-      this->sendMidiNote(this->notes[this->currentStep]);
+      this->sendNoteOn(this->notes[this->currentStep]);
+    }else{
+      this->sendNoteOff(this->notes[this->currentStep]);
     }
 
     this->beatClock = 0;
@@ -140,11 +192,59 @@ inline byte Sequencer::getCurrentStep(){
 
 inline void Sequencer::setTempo(byte tempo){
   this->tempo = tempo;
-  this->timeBetweenSteps = (float)1/tempo*60*1000 /4;
+  this->timeBetweenSteps = (float)1/tempo*60*1000/4;
 }
 
-inline void Sequencer::sendMidiNote(byte note){
+inline void Sequencer::sendNoteOn(byte note){
   MIDI.sendNoteOn(note, 127, 1);
   usbMIDI.sendNoteOn(note, 127, 1);
+}
+
+inline void Sequencer::sendNoteOff(byte note){
+  MIDI.sendNoteOff(note, 127, 1);
+  usbMIDI.sendNoteOff(note, 127, 1);
+}
+
+inline void Sequencer::sendStop(){
+//  MIDI.sendRealTime(MIDI_NAMESPACE::Stop);
+  for(byte i=0; i<8; i++){
+    this->sendNoteOff(this->notes[i]);
+  }
+}
+
+inline void Sequencer::iterateDirection(){
+  switch(this->direction){
+    case Forward:
+      this->direction = Backward;
+    break;
+    case Backward:
+      this->direction = Pendulum;
+    break;
+    case Pendulum:
+      this->direction = Transposer;
+    break;
+    case Transposer:
+      this->direction = Forward;
+    break;
+  }
+}
+
+inline byte Sequencer::getDirectionIndex(){
+  switch(this->direction){
+    case Forward:
+      return 0;
+    break;
+    case Backward:
+      return 1;
+    break;
+    case Pendulum:
+      return 2;
+    break;
+    case Transposer:
+      return 3;
+    break;
+  }
+
+  return 0;
 }
 #endif
