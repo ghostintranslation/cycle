@@ -1,4 +1,4 @@
-# cycle
+# CYCLE
 CYCLE is a modular monophonic sequencer, based on eurorack physical format it has however no patch cables in the front but has rather midi jacks in the back.
 
 It is based on [Motherboard12](https://github.com/ghostintranslation/motherboard12).
