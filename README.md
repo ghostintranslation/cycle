@@ -5,10 +5,10 @@ It is based on [Motherboard12](https://github.com/ghostintranslation/motherboard
 
 NOTE: This is a work in progress.
 
-<img src="cycle.jpg" width="200px"/>
-<img src="cycle-side.jpg" width="200px"/>
+<img src="cycle.jpg" width="200px"/> <img src="cycle-side.jpg" width="200px"/>
 
 ## Features
+
 * 8 steps
 * Forward, Backward, Pendulum, Transposer modes
 * Scales
@@ -38,6 +38,16 @@ What things you need to make it work:
 1 resistor ~ 80ohm
 1 4 positions dipswitch (optional)
 ```
+
+In order to run any sketch on the Teensy you have to install the Teensyduino add-on to Arduino.
+Follow the instructions from the official page:
+https://www.pjrc.com/teensy/teensyduino.html
+
+Then open the sketch located in the Cycle folder of this repo.
+
+In the Tools -> USB Type menu, choose "Serial + midi".
+
+Then you are ready to compile and upload the sketch.
 
 # How to use
 
