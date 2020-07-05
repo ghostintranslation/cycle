@@ -60,14 +60,16 @@ inline void Sequencer::update(){
       if(this->bounceClock > 500){
         if(directionInput){
           this->display->setCurrentDisplay(DisplayMode::Direction);
+         this->bounceClock = 0;
         }
         else if(scaleInput){
           this->display->setCurrentDisplay(DisplayMode::Scale);
+          this->bounceClock = 0;
         }
         else if(accentInput){
           this->display->setCurrentDisplay(DisplayMode::Accent);
+          this->bounceClock = 0;
         }
-        this->bounceClock = 0;
       }
 
       // Reading the steps inputs
