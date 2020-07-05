@@ -13,7 +13,8 @@ class Sequencer{
     bool play = true;
     byte currentStep;
     unsigned int timeBetweenSteps;
-    elapsedMillis beatClock;
+    elapsedMillis stepClock;
+    byte beatCount = 0;
     enum Direction { Forward, Backward, Pendulum, Transposer };
     Direction direction = Forward;
     bool pendulumState = true;
@@ -139,79 +140,81 @@ inline void Sequencer::update(){
     // Play / Stop
     if(this->bounceClock > 500){
       this->play = !this->play;
-      this->currentStep = -1;
+      this->currentStep = 0;
       this->bounceClock = 0;
+      this->stepClock = 0;
+      this->beatCount = 0;
       if(!this->play){
         this->sendStop();
       }
     }
   }
 
-  if (!this->play && this->tempo > 0 && this->beatClock >= this->timeBetweenSteps){
+  if(this->tempo > 0 && this->stepClock >= this->timeBetweenSteps){
+    this->stepClock = 0;
+
+    this->beatCount++;
+    this->beatCount = this->beatCount % 4;
+
+    // Display the tempo
+    if(this->beatCount == 0){
+      this->device->setDisplay(8, 4);  
+    }
+
+    // Moving steps
+    if (this->play) {
+      this->sendNoteOff(this->notes[this->currentStep]);
+      this->activeNotes[this->currentStep] = false;
+  
+      switch(this->direction){
+        case Forward:
+        default:
+          this->currentStep++;
+          
+          if(this->currentStep == 8){
+            this->currentStep = 0;
+          }
+        break;
+        case Backward:
+          this->currentStep--;
+        break;
+        
+        case Pendulum:
+          if(this->pendulumState){
+            this->currentStep++;
+            if(this->currentStep > 7){
+              this->currentStep = 0;
+              this->pendulumState = !this->pendulumState;
+            }
+          }else{
+            this->currentStep--;
+            if(this->currentStep == 0){
+              this->pendulumState = !this->pendulumState;
+            }
+          }
+        break;
+      }
+      
+      this->currentStep = constrain(this->currentStep, 0, 7);
+
+      if(this->notes[this->currentStep] > 0){
+        this->sendNoteOn(this->notes[this->currentStep]);
+        this->activeNotes[this->currentStep] = true;
+      }else{
+        this->sendNoteOff(this->notes[this->currentStep]);
+        this->activeNotes[this->currentStep] = false;
+      }
+    }
+    else{
+      // If not playing then stop any note still active
       for(byte i=0; i<8; i++){
         if(this->activeNotes[i]){
           this->sendNoteOff(this->notes[i]);
           this->activeNotes[i] = false;
         }
       }
+    }
   }
-  
-  // Moving steps
-  if (this->play && this->tempo > 0 && this->beatClock >= this->timeBetweenSteps) {
-    this->sendNoteOff(this->notes[this->currentStep]);
-    this->activeNotes[this->currentStep] = false;
-
-    switch(this->direction){
-      case Forward:
-      default:
-        this->currentStep++;
-        
-        if(this->currentStep == 8){
-          this->currentStep = 0;
-        }
-      break;
-      case Backward:
-        this->currentStep--;
-      break;
-      
-      case Pendulum:
-        if(this->pendulumState){
-          this->currentStep++;
-          if(this->currentStep > 7){
-            this->currentStep = 0;
-            this->pendulumState = !this->pendulumState;
-          }
-        }else{
-          this->currentStep--;
-          if(this->currentStep == 0){
-            this->pendulumState = !this->pendulumState;
-          }
-        }
-      break;
-    }
-    
-    this->currentStep = constrain(this->currentStep, 0, 7);
-    
-
-    // Display the tempo
-    if(this->currentStep%4 == 0){
-      this->device->setDisplay(8, 4);
-    }
-
-
-
-    if(this->notes[this->currentStep] > 0){
-      this->sendNoteOn(this->notes[this->currentStep]);
-      this->activeNotes[this->currentStep] = true;
-    }else{
-      this->sendNoteOff(this->notes[this->currentStep]);
-      this->activeNotes[this->currentStep] = false;
-    }
-
-    this->beatClock = 0;
-  }
-
-
   
   this->display->update();
 }

@@ -101,7 +101,9 @@ inline void Display::displayAccent() {
 }
 
 inline void Display::displaySteps(){
-  this->device->resetDisplay();
+  for(byte i=0; i<8; i++){
+    this->device->setDisplay(i, 0);
+  }
   this->device->setDisplay(cursorIndex, 5);
 }
 
