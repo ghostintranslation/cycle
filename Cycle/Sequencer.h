@@ -25,7 +25,8 @@ class Sequencer{
     Display *display;
     Motherboard12 *device;
     elapsedMillis bounceClock;
-    byte *notes;
+    byte notes[8];
+    bool activeNotes[8];
 
   public:
     Sequencer(Motherboard12 *device);
@@ -44,6 +45,14 @@ inline Sequencer::Sequencer(Motherboard12* device){
   this->device = device;
   this->display = new Display(this->device);
   this->setTempo(60);
+
+  for(byte i=0; i<8; i++){
+    this->notes[i] = 0;
+  }
+  
+  for(byte i=0; i<8; i++){
+    this->activeNotes[i] = false;
+  }
 }
 
 inline void Sequencer::update(){
@@ -78,7 +87,14 @@ inline void Sequencer::update(){
         if(noteInput == 0){
           this->notes[i] = 0;
         }else{
-          this->notes[i] = map(this->device->getInput(i), this->device->getAnalogMinValue(), this->device->getAnalogMaxValue(), 60, 84);
+          byte note = map(this->device->getInput(i), this->device->getAnalogMinValue(), this->device->getAnalogMaxValue(), 60, 84);
+          // If the sequencer is not playing and a step has changed
+          if(!this->play && note != this->notes[i] && !this->activeNotes[i]){
+            // Play the note
+            this->sendNoteOn(note);
+            this->activeNotes[i] = true;
+          }
+          this->notes[i] = note;
         }
       }
       
@@ -130,10 +146,20 @@ inline void Sequencer::update(){
       }
     }
   }
+
+  if (!this->play && this->tempo > 0 && this->beatClock >= this->timeBetweenSteps){
+      for(byte i=0; i<8; i++){
+        if(this->activeNotes[i]){
+          this->sendNoteOff(this->notes[i]);
+          this->activeNotes[i] = false;
+        }
+      }
+  }
   
   // Moving steps
   if (this->play && this->tempo > 0 && this->beatClock >= this->timeBetweenSteps) {
     this->sendNoteOff(this->notes[this->currentStep]);
+    this->activeNotes[this->currentStep] = false;
 
     switch(this->direction){
       case Forward:
@@ -176,8 +202,10 @@ inline void Sequencer::update(){
 
     if(this->notes[this->currentStep] > 0){
       this->sendNoteOn(this->notes[this->currentStep]);
+      this->activeNotes[this->currentStep] = true;
     }else{
       this->sendNoteOff(this->notes[this->currentStep]);
+      this->activeNotes[this->currentStep] = false;
     }
 
     this->beatClock = 0;
@@ -211,6 +239,7 @@ inline void Sequencer::sendStop(){
 //  MIDI.sendRealTime(MIDI_NAMESPACE::Stop);
   for(byte i=0; i<8; i++){
     this->sendNoteOff(this->notes[i]);
+    this->activeNotes[i] = false;
   }
 }
 
