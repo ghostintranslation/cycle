@@ -25,11 +25,40 @@ class Motherboard12{
     unsigned int *potentiometersTemp;
     byte *potentiometersReadings; 
     // Encoders 
-    int *encoders;
+    byte *encoders;
     bool *encodersSwitch;
-    int *encodersLast;
+    byte *encodersState;
     byte currentEncPinA;
     byte currentEncPinB;
+    #define R_START 0x0
+    #define R_CW_FINAL 0x1
+    #define R_CW_BEGIN 0x2
+    #define R_CW_NEXT 0x3
+    #define R_CCW_BEGIN 0x4
+    #define R_CCW_FINAL 0x5
+    #define R_CCW_NEXT 0x6
+    // No complete step yet.
+    #define DIR_NONE 0x0
+    // Clockwise step.
+    #define DIR_CW 0x10
+    // Anti-clockwise step.
+    #define DIR_CCW 0x20
+    const byte ttable[7][4] = {
+      // R_START
+      {R_START,    R_CW_BEGIN,  R_CCW_BEGIN, R_START},
+      // R_CW_FINAL
+      {R_CW_NEXT,  R_START,     R_CW_FINAL,  R_START | DIR_CW},
+      // R_CW_BEGIN
+      {R_CW_NEXT,  R_CW_BEGIN,  R_START,     R_START},
+      // R_CW_NEXT
+      {R_CW_NEXT,  R_CW_BEGIN,  R_CW_FINAL,  R_START},
+      // R_CCW_BEGIN
+      {R_CCW_NEXT, R_START,     R_CCW_BEGIN, R_START},
+      // R_CCW_FINAL
+      {R_CCW_NEXT, R_CCW_FINAL, R_START,     R_START | DIR_CCW},
+      // R_CCW_NEXT
+      {R_CCW_NEXT, R_CCW_FINAL, R_CCW_BEGIN, R_START},
+    };
     // Debug clock
     elapsedMillis clockDebug;
     // Main clock
@@ -87,8 +116,8 @@ inline Motherboard12::Motherboard12(byte *inputs){
   this->potentiometers = new unsigned int[this->ioNumber];
   this->potentiometersTemp = new unsigned int[this->ioNumber];
   this->potentiometersReadings = new byte[this->ioNumber];
-  this->encoders = new int[this->ioNumber];
-  this->encodersLast = new int[this->ioNumber];
+  this->encoders = new byte[this->ioNumber];
+  this->encodersState = new byte[this->ioNumber];
   this->encodersSwitch = new bool[this->ioNumber];
 
   for(byte i = 0; i < this->ioNumber; i++){
@@ -100,8 +129,8 @@ inline Motherboard12::Motherboard12(byte *inputs){
     this->potentiometersTemp[i] = 0;
     this->potentiometersReadings[i] = 0;
     this->encoders[i] = 0;
+    this->encodersState[i] = 0;
     this->encodersSwitch[i] = true;
-    this->encodersLast[i] = HIGH;
   }
 
 }
@@ -181,7 +210,7 @@ inline void Motherboard12::update(){
 
   // Debug
   if (this->clockDebug >= 100) {
-//    this->printInputs();
+    this->printInputs();
 //    this->printLeds();
     this->clockDebug = 0;
   }
@@ -514,20 +543,17 @@ inline void Motherboard12::readEncoder(byte inputIndex){
   // When reading of Pin A and B is done we can interpret the result
   if (this->clockInputs > this->intervalInputs / 1.40
   && this->clockInputs < this->intervalInputs / 1.20) {
-    if ((this->encodersLast[inputIndex] == LOW) && (this->currentEncPinA == HIGH)) {
-      if (this->currentEncPinB == LOW) {
-        this->encoders[inputIndex] += 1;
-      } else {
-        this->encoders[inputIndex] -= 1;
-      }
-//      for(byte j = 0; j < this->ioNumber; j++){
-//        Serial.print (this->encoders[j]);
-//        Serial.print ("/");
-//      }
-//      Serial.println("");
+    byte pinstate = (this->currentEncPinB << 1) | this->currentEncPinA;
+    // Determine new state from the pins and state table.
+    this->encodersState[inputIndex] = this->ttable[this->encodersState[inputIndex] & 0xf][pinstate];
+    // Return emit bits, ie the generated event.
+    byte result = this->encodersState[inputIndex] & 0x30;
+
+    if (result == DIR_CW) {
+      this->encoders[inputIndex]--;
+    } else if (result == DIR_CCW) {
+      this->encoders[inputIndex]++;
     }
-    
-    this->encodersLast[inputIndex] = this->currentEncPinA;
 
     // Setting the main multiplexer on encoder's buttons
     this->setMainMuxOnEncoders2();

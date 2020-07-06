@@ -11,8 +11,8 @@
 class Sequencer{
   private:
     bool play = true;
-    byte currentStep;
-    unsigned int timeBetweenSteps;
+    byte currentStep = 0;
+    unsigned int timeBetweenSteps = 0;
     elapsedMillis stepClock;
     byte beatCount = 0;
     enum Direction { Forward, Backward, Pendulum, Transposer };
@@ -135,7 +135,6 @@ inline void Sequencer::update(){
   }
   
 //  bool playInput = this->device->getEncoderSwitch(8);
-//    Serial.println(playInput);
   if(this->device->getEncoderSwitch(8)){
     // Play / Stop
     if(this->bounceClock > 500){
