@@ -13,6 +13,7 @@ class Motherboard12{
     byte columnsNumber = 4;
     byte ioNumber;
     byte analogResolution = 10;
+    byte midiChannel = 0;
     
     byte *inputs;
     byte *leds;
@@ -24,6 +25,7 @@ class Motherboard12{
     // For smoothing purposes
     unsigned int *potentiometersTemp;
     byte *potentiometersReadings; 
+    
     // Encoders 
     byte *encoders;
     bool *encodersSwitch;
@@ -59,6 +61,7 @@ class Motherboard12{
       // R_CCW_NEXT
       {R_CCW_NEXT, R_CCW_FINAL, R_CCW_BEGIN, R_START},
     };
+    
     // Debug clock
     elapsedMillis clockDebug;
     // Main clock
@@ -72,7 +75,6 @@ class Motherboard12{
     // Inputs clock
     const unsigned int intervalInputs = 100;
     elapsedMicros clockInputs;
-//    void iterateRows();
     void updateDisplay();
     void iterateDisplay();
     void iterateInputs();
@@ -80,6 +82,7 @@ class Motherboard12{
     void readButton(byte inputIndex);
     void readPotentiometer(byte inputIndex);
     void readEncoder(byte inputIndex);
+    void readMidiChannel();
     void setMainMuxOnLeds();
     void setMainMuxOnLeds2();
     void setMainMuxOnPots();
@@ -100,8 +103,8 @@ class Motherboard12{
     bool getEncoderSwitch(byte index);
     int getAnalogMaxValue();
     int getAnalogMinValue();
+    byte getMidiChannel();
 };
-
 
 /**
  * Constructor
@@ -159,6 +162,8 @@ inline void Motherboard12::init(){
 
   analogReadResolution(this->analogResolution);
 
+  this->readMidiChannel();
+  
   // Init sequence
   for(byte i = 0; i<this->ioNumber; i++){
     this->setDisplay(i, 1);
@@ -286,23 +291,6 @@ inline void Motherboard12::setMainMuxOnChannel(){
   digitalWrite(3, HIGH);
   digitalWrite(4, HIGH);
 }
-
-/**
- * Iterate over the rows
- */
-//inline void Motherboard12::iterateRows(){
-//  this->currentRow++;
-//  this->currentRow = this->currentRow % 3;
-//  
-//  for(byte i = 0; i < 3; i++){
-//    if(i == this->currentRow){
-//      digitalWrite(2 + this->currentRow, LOW);
-//    }else{
-//      digitalWrite(2 + i, HIGH);
-//    }
-//  }
-//}
-
 
 /**
  * Iterate LEDs
@@ -481,7 +469,7 @@ inline void Motherboard12::readPotentiometer(byte inputIndex){
   if(this->potentiometersReadings[inputIndex] == 255){
     this->potentiometers[inputIndex] = this->potentiometersTemp[inputIndex] / 255; 
     this->potentiometers[inputIndex] = map(this->potentiometers[inputIndex], this->getAnalogMinValue(), this->getAnalogMaxValue(), 0, 1023);
-    
+    this->potentiometers[inputIndex] = constrain(this->potentiometers[inputIndex], 0, 1023);
     this->potentiometersReadings[inputIndex] = 0;
     this->potentiometersTemp[inputIndex] = 0;
   }
@@ -543,6 +531,7 @@ inline void Motherboard12::readEncoder(byte inputIndex){
   // When reading of Pin A and B is done we can interpret the result
   if (this->clockInputs > this->intervalInputs / 1.40
   && this->clockInputs < this->intervalInputs / 1.20) {
+    
     byte pinstate = (this->currentEncPinB << 1) | this->currentEncPinA;
     // Determine new state from the pins and state table.
     this->encodersState[inputIndex] = this->ttable[this->encodersState[inputIndex] & 0xf][pinstate];
@@ -580,6 +569,25 @@ inline void Motherboard12::readEncoder(byte inputIndex){
 //        Serial.println("");
 //    }
 //  }
+}
+
+inline void Motherboard12::readMidiChannel(){
+  this->setMainMuxOnChannel();
+  delay(50); // Only because this function is used in Init only
+
+  byte midiChannel = 0b00000000;
+  for(byte i=0; i<4; i++){
+    byte r0 = bitRead(i, 0);   
+    byte r1 = bitRead(i, 1);    
+    byte r2 = bitRead(i, 2);
+    digitalWrite(5, r0);
+    digitalWrite(9, r1);
+    digitalWrite(14, r2);
+    delay(5); // Only because this function is used in Init only
+    byte channelBit = !digitalRead(22);
+    bitWrite(midiChannel, i, channelBit);
+  }
+  this->midiChannel = midiChannel;
 }
 
 /**
@@ -641,18 +649,20 @@ inline bool Motherboard12::getEncoderSwitch(byte index){
 
 /**
  * Get max analog value according to resolution
- * Currently used to compensate actual values
  */
 inline int Motherboard12::getAnalogMinValue(){
-  return 0;//(1 << this->analogResolution) - 1;
+  return 0;
 }
 
 /**
  * Get max analog value according to resolution
- * Currently used to compensate actual values
  */
 inline int Motherboard12::getAnalogMaxValue(){
-  return 1022;//(1 << this->analogResolution) - 1;
+  return (1 << this->analogResolution) - 1;
+}
+
+inline byte Motherboard12::getMidiChannel(){ 
+  return this->midiChannel;
 }
 
 /**
@@ -685,6 +695,10 @@ inline void Motherboard12::printInputs(){
     Serial.print(this->buttons[j]);
     Serial.print(" ");
   }
+  Serial.println("");
+
+  Serial.println("Midi Channel:");
+  Serial.print(this->midiChannel);
   Serial.println("");
   
   Serial.println("");
