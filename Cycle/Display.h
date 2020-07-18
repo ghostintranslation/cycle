@@ -23,7 +23,7 @@ class Display {
     void displayAccent();
 
   public:
-    Display(Motherboard12 *device);
+    Display();
     void update();
     void setCurrentDisplay(DisplayMode displayMode);
     DisplayMode getCurrentDisplayMode();
@@ -35,8 +35,8 @@ class Display {
 /**
    Constructor
 */
-inline Display::Display(Motherboard12 *device) {
-  this->device = device;
+inline Display::Display() {
+  this->device = Motherboard12::getInstance();
   this->currentDisplay = Steps;
 }
 
@@ -93,6 +93,12 @@ inline void Display::displayDirection() {
 inline void Display::displayScale() {
   this->device->resetDisplay();
 
+  this->device->resetDisplay();
+
+  for(byte i=0; i<8; i++){
+    this->device->setDisplay(i, 1);
+  }
+  this->device->setDisplay(this->cursorIndex, 2);
 }
 
 inline void Display::displayAccent() {

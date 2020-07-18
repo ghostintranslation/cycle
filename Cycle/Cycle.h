@@ -1,5 +1,8 @@
-#ifndef Sequencer_h
-#define Sequencer_h
+#ifndef Cycle_h
+#define Cycle_h
+
+#include <MIDI.h>
+MIDI_CREATE_DEFAULT_INSTANCE(); // MIDI library init
 
 #include "Display.h"
 #include "Motherboard12.h"
@@ -8,8 +11,14 @@
 /*
  * Sequencer
  */
-class Sequencer{
+class Cycle{
   private:
+    static Cycle *instance;
+    Cycle();
+    
+    // Motherboard
+    Motherboard12 *device;
+    
     bool play = true;
     byte currentStep = 0;
     unsigned int timeBetweenSteps = 0;
@@ -18,19 +27,25 @@ class Sequencer{
     enum Direction { Forward, Backward, Pendulum, Transposer };
     Direction direction = Forward;
     bool pendulumState = true;
-    void iterateDirection();
-    byte getDirectionIndex();
-//    enum Mode { Play, Direction, Scale, Accent };
-//    Mode mode = Play;
+    byte scales[4][12] = {
+      {0,1,2,3,4,5,6,7,8,9,10,11}, // All notes
+      {0,1,2,3,3,5,5,7,7,9,10,10}, // Adonai Malakh (Israel)
+      {0,0,3,3,5,5,6,6,7,7,10,10}, // Blues
+      {0,0,3,3,4,4,6,6,8,9,10,10} // Aeolian flat 1
+    };
+    byte scale = 0;
     byte tempo = 0;
-    Display *display;
-    Motherboard12 *device;
     elapsedMillis bounceClock;
     byte notes[8];
     bool activeNotes[8];
+    Display *display;
+    void iterateDirection();
+    byte getDirectionIndex();
+
 
   public:
-    Sequencer(Motherboard12 *device);
+    static Cycle *getInstance();
+    void init();
     void update();
     byte getCurrentStep();
     void setTempo(byte tempo);
@@ -39,12 +54,15 @@ class Sequencer{
     void sendStop();
 };
 
+// Singleton pre init
+Cycle * Cycle::instance = nullptr;
+
 /**
  * Constructor
  */
-inline Sequencer::Sequencer(Motherboard12* device){
-  this->device = device;
-  this->display = new Display(this->device);
+inline Cycle::Cycle(){
+  this->device = Motherboard12::getInstance();
+  this->display = new Display();
   this->setTempo(60);
 
   for(byte i=0; i<8; i++){
@@ -56,7 +74,31 @@ inline Sequencer::Sequencer(Motherboard12* device){
   }
 }
 
-inline void Sequencer::update(){
+/**
+ * Singleton instance
+ */
+inline static Cycle *Cycle::getInstance()    {
+  if (!instance)
+     instance = new Cycle;
+  return instance;
+}
+
+/**
+ * Init
+ */
+inline void Cycle::init(){
+  // 0 = empty, 1 = button, 2 = potentiometer, 3 = encoder
+  byte controls[12] = {2,2,2,2, 2,2,2,2, 3,1,1,1};
+  this->device->init(controls);
+
+  MIDI.begin(MIDI_CHANNEL_OMNI);
+}
+
+inline void Cycle::update(){
+  this->device->update();
+  
+  MIDI.read();
+  usbMIDI.read();
   
   switch(this->display->getCurrentDisplayMode()){
     case DisplayMode::Steps:
@@ -89,6 +131,10 @@ inline void Sequencer::update(){
           this->notes[i] = 0;
         }else{
           byte note = map(this->device->getInput(i), this->device->getAnalogMinValue(), this->device->getAnalogMaxValue(), 60, 84);
+          if(this->scale > 0){
+            byte octave = note / 12;
+            note = 12 * octave + this->scales[this->scale][note % 12];
+          }
           // If the sequencer is not playing and a step has changed
           if(!this->play && note != this->notes[i] && !this->activeNotes[i]){
             // Play the note
@@ -104,7 +150,7 @@ inline void Sequencer::update(){
     case DisplayMode::Direction:
     {
       this->display->setCursorIndex(this->getDirectionIndex());
-//      this->display->setCurrentDisplay(DisplayMode::Direction);
+      
       bool directionInput = this->device->getInput(9);
       if(directionInput){
         if(this->bounceClock > 500){
@@ -116,8 +162,19 @@ inline void Sequencer::update(){
       break;
     }
     case DisplayMode::Scale:
-//      this->display->setCurrentDisplay(DisplayMode::Scale);
-      break;
+    {
+      this->display->setCursorIndex(this->scale);
+      
+      bool scaleInput = this->device->getInput(10);
+      if(scaleInput){
+        if(this->bounceClock > 500){
+          this->scale = (this->scale + 1) % 8;
+          this->display->keepCurrentDisplay();
+          this->bounceClock = 0;
+        }
+      }
+    }
+    break;
     case DisplayMode::Accent:
 //      this->display->setCurrentDisplay(DisplayMode::Accent);
       break;
@@ -218,26 +275,26 @@ inline void Sequencer::update(){
   this->display->update();
 }
 
-inline byte Sequencer::getCurrentStep(){
+inline byte Cycle::getCurrentStep(){
   return this->currentStep;
 }
 
-inline void Sequencer::setTempo(byte tempo){
+inline void Cycle::setTempo(byte tempo){
   this->tempo = tempo;
   this->timeBetweenSteps = (float)1/tempo*60*1000/4;
 }
 
-inline void Sequencer::sendNoteOn(byte note){
+inline void Cycle::sendNoteOn(byte note){
   MIDI.sendNoteOn(note, 127, 1);
   usbMIDI.sendNoteOn(note, 127, 1);
 }
 
-inline void Sequencer::sendNoteOff(byte note){
+inline void Cycle::sendNoteOff(byte note){
   MIDI.sendNoteOff(note, 127, 1);
   usbMIDI.sendNoteOff(note, 127, 1);
 }
 
-inline void Sequencer::sendStop(){
+inline void Cycle::sendStop(){
 //  MIDI.sendRealTime(MIDI_NAMESPACE::Stop);
   for(byte i=0; i<8; i++){
     this->sendNoteOff(this->notes[i]);
@@ -245,7 +302,7 @@ inline void Sequencer::sendStop(){
   }
 }
 
-inline void Sequencer::iterateDirection(){
+inline void Cycle::iterateDirection(){
   switch(this->direction){
     case Forward:
       this->direction = Backward;
@@ -262,7 +319,7 @@ inline void Sequencer::iterateDirection(){
   }
 }
 
-inline byte Sequencer::getDirectionIndex(){
+inline byte Cycle::getDirectionIndex(){
   switch(this->direction){
     case Forward:
       return 0;
