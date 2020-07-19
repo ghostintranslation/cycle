@@ -91,14 +91,14 @@ inline void Cycle::init(){
   byte controls[12] = {2,2,2,2, 2,2,2,2, 3,1,1,1};
   this->device->init(controls);
 
-  MIDI.begin(MIDI_CHANNEL_OMNI);
+  MIDI.begin(this->device->getMidiChannel());
 }
 
 inline void Cycle::update(){
   this->device->update();
   
-  MIDI.read();
-  usbMIDI.read();
+  MIDI.read(this->device->getMidiChannel());
+  usbMIDI.read(this->device->getMidiChannel());
   
   switch(this->display->getCurrentDisplayMode()){
     case DisplayMode::Steps:
@@ -285,13 +285,13 @@ inline void Cycle::setTempo(byte tempo){
 }
 
 inline void Cycle::sendNoteOn(byte note){
-  MIDI.sendNoteOn(note, 127, 1);
-  usbMIDI.sendNoteOn(note, 127, 1);
+  MIDI.sendNoteOn(note, 127, this->device->getMidiChannel());
+  usbMIDI.sendNoteOn(note, 127, this->device->getMidiChannel());
 }
 
 inline void Cycle::sendNoteOff(byte note){
-  MIDI.sendNoteOff(note, 127, 1);
-  usbMIDI.sendNoteOff(note, 127, 1);
+  MIDI.sendNoteOff(note, 127, this->device->getMidiChannel());
+  usbMIDI.sendNoteOff(note, 127, this->device->getMidiChannel());
 }
 
 inline void Cycle::sendStop(){
