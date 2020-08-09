@@ -3,7 +3,7 @@
 
 #include "Motherboard12.h"
 
-enum DisplayMode { Steps, Direction, Scale, Accent };
+enum DisplayMode { Clock, Sequencer, Direction, Scale, Accent };
 
 /*
    Display
@@ -17,7 +17,8 @@ class Display {
     elapsedMillis clock_count_blink;
     elapsedMillis clock_count_display;
     const byte interval_time = 50;
-    void displaySteps();
+    void displayClock();
+    void displaySequencer();
     void displayDirection();
     void displayScale();
     void displayAccent();
@@ -27,7 +28,7 @@ class Display {
     void update();
     void setCurrentDisplay(DisplayMode displayMode);
     DisplayMode getCurrentDisplayMode();
-    void setCursorIndex(byte index);
+    void setCursor(byte index);
     void keepCurrentDisplay();
 };
 
@@ -37,36 +38,41 @@ class Display {
 */
 inline Display::Display() {
   this->device = Motherboard12::getInstance();
-  this->currentDisplay = Steps;
+  this->currentDisplay = Sequencer;
 }
 
 inline void Display::update() {
   switch (this->currentDisplay) {
+    // Clock display
+    case Clock:
+      this->displayClock();
+    break;
+    
     case Direction:
       this->displayDirection();
       
       // Go back to Pattern display after 1000ms
       if (this->clock_count_display >= 1000) {
-        this->currentDisplay = Steps;
+        this->currentDisplay = Sequencer;
       }
     break;
     case Scale:
       this->displayScale();
         // Go back to Pattern display after 1000ms
       if (this->clock_count_display >= 1000) {
-        this->currentDisplay = Steps;
+        this->currentDisplay = Sequencer;
       }
     break;
     case Accent:
       this->displayAccent();
         // Go back to Pattern display after 1000ms
       if (this->clock_count_display >= 1000) {
-        this->currentDisplay = Steps;
+        this->currentDisplay = Sequencer;
       }
     break;
-    case Steps:
+    case Sequencer:
     default:
-      this->displaySteps();
+      this->displaySequencer();
     break;
   }
 
@@ -81,43 +87,51 @@ inline void Display::setCurrentDisplay(DisplayMode displayMode) {
   //  }
 }
 
+/**
+ * Clock display
+ */
+inline void Display::displayClock() {
+  this->device->resetAllLED();
+  this->device->setLED(8, this->cursorIndex + 2);
+}
+
 inline void Display::displayDirection() {
-  this->device->resetDisplay();
+  this->device->resetAllLED();
 
   for(byte i=0; i<4; i++){
-    this->device->setDisplay(i, 1);
+    this->device->setLED(i, 1);
   }
-  this->device->setDisplay(this->cursorIndex, 2);
+  this->device->setLED(this->cursorIndex, 2);
 }
 
 inline void Display::displayScale() {
-  this->device->resetDisplay();
+  this->device->resetAllLED();
 
-  this->device->resetDisplay();
+  this->device->resetAllLED();
 
   for(byte i=0; i<8; i++){
-    this->device->setDisplay(i, 1);
+    this->device->setLED(i, 1);
   }
-  this->device->setDisplay(this->cursorIndex, 2);
+  this->device->setLED(this->cursorIndex, 2);
 }
 
 inline void Display::displayAccent() {
-  this->device->resetDisplay();
+  this->device->resetAllLED();
 
 }
 
-inline void Display::displaySteps(){
+inline void Display::displaySequencer(){
   for(byte i=0; i<8; i++){
-    this->device->setDisplay(i, 0);
+    this->device->setLED(i, 0);
   }
-  this->device->setDisplay(cursorIndex, 5);
+  this->device->setLED(cursorIndex, 1);
 }
 
 inline DisplayMode Display::getCurrentDisplayMode(){
   return currentDisplay;
 }
 
-inline void Display::setCursorIndex(byte cursorIndex){
+inline void Display::setCursor(byte cursorIndex){
   this->cursorIndex = cursorIndex;
 }
 

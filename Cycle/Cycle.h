@@ -19,11 +19,16 @@ class Cycle{
     // Motherboard
     Motherboard12 *device;
     
-    bool play = true;
+    enum ClockMode { Leading = 0, Following = 1 };
+    ClockMode clockMode = Leading;
+    
+    bool isPlaying = true;
     byte currentStep = 0;
     unsigned int timeBetweenSteps = 0;
+    unsigned int timeBetweenTicks = 0;
     elapsedMillis stepClock;
-    byte beatCount = 0;
+    elapsedMillis ticksClock;
+
     enum Direction { Forward, Backward, Pendulum, Transposer };
     Direction direction = Forward;
     bool pendulumState = true;
@@ -51,7 +56,27 @@ class Cycle{
     void setTempo(byte tempo);
     void sendNoteOn(byte note);
     void sendNoteOff(byte note);
+    void sendStart();
     void sendStop();
+    
+    // Midi callbacks
+    static void onSongPosition(unsigned beats);
+    static void onStart();
+    static void onStop();
+    
+    // Controls callbacks
+    // Clock
+    static void onClockShortPress(byte inputIndex);
+    static void onClockLongPress(byte inputIndex);
+    static void onClockChange(bool value);
+    // Direction
+    static void onDirectionPress(byte inputIndex);
+    // Scale
+    static void onScalePress(byte inputIndex);
+    // Accent
+    static void onAccentPress(byte inputIndex);
+    
+    void onStepIncrement();
 };
 
 // Singleton pre init
@@ -77,7 +102,7 @@ inline Cycle::Cycle(){
 /**
  * Singleton instance
  */
-inline static Cycle *Cycle::getInstance()    {
+inline Cycle *Cycle::getInstance()    {
   if (!instance)
      instance = new Cycle;
   return instance;
@@ -90,39 +115,31 @@ inline void Cycle::init(){
   // 0 = empty, 1 = button, 2 = potentiometer, 3 = encoder
   byte controls[12] = {2,2,2,2, 2,2,2,2, 3,1,1,1};
   this->device->init(controls);
-
+  
+  // Midi callbacks
+  MIDI.setHandleSongPosition(onSongPosition);
+  MIDI.setHandleStart(onStart);
+  MIDI.setHandleStop(onStop);
   MIDI.begin(this->device->getMidiChannel());
+  
+  // Device callbacks
+  this->device->setHandlePressUp(8, onClockShortPress);
+  this->device->setHandleLongPressUp(8, onClockLongPress);
+  this->device->setHandleRotaryChange(8, onClockChange);
+  this->device->setHandlePressUp(9, onDirectionPress);
+  this->device->setHandlePressUp(10, onScalePress);
 }
 
 inline void Cycle::update(){
   this->device->update();
   
   MIDI.read(this->device->getMidiChannel());
-  usbMIDI.read(this->device->getMidiChannel());
+//  usbMIDI.read(this->device->getMidiChannel());
   
   switch(this->display->getCurrentDisplayMode()){
-    case DisplayMode::Steps:
-    { // This bracket is to prevent issues with variables declared inside the case
-      this->display->setCursorIndex(this->currentStep);
-      
-      // Reading buttons to switch mode
-      bool directionInput = this->device->getInput(9);
-      bool scaleInput = this->device->getInput(10);
-      bool accentInput = this->device->getInput(11);
-      if(this->bounceClock > 500){
-        if(directionInput){
-          this->display->setCurrentDisplay(DisplayMode::Direction);
-         this->bounceClock = 0;
-        }
-        else if(scaleInput){
-          this->display->setCurrentDisplay(DisplayMode::Scale);
-          this->bounceClock = 0;
-        }
-        else if(accentInput){
-          this->display->setCurrentDisplay(DisplayMode::Accent);
-          this->bounceClock = 0;
-        }
-      }
+    case DisplayMode::Sequencer:
+    {
+      this->display->setCursor(this->currentStep);
 
       // Reading the steps inputs
       for(byte i=0; i<8; i++){
@@ -136,7 +153,7 @@ inline void Cycle::update(){
             note = 12 * octave + this->scales[this->scale][note % 12];
           }
           // If the sequencer is not playing and a step has changed
-          if(!this->play && note != this->notes[i] && !this->activeNotes[i]){
+          if(!this->isPlaying && note != this->notes[i] && !this->activeNotes[i]){
             // Play the note
             this->sendNoteOn(note);
             this->activeNotes[i] = true;
@@ -147,78 +164,28 @@ inline void Cycle::update(){
       
       break;
     }
-    case DisplayMode::Direction:
-    {
-      this->display->setCursorIndex(this->getDirectionIndex());
-      
-      bool directionInput = this->device->getInput(9);
-      if(directionInput){
-        if(this->bounceClock > 500){
-          this->iterateDirection();
-          this->display->keepCurrentDisplay();
-          this->bounceClock = 0;
-        }
-      }
-      break;
-    }
-    case DisplayMode::Scale:
-    {
-      this->display->setCursorIndex(this->scale);
-      
-      bool scaleInput = this->device->getInput(10);
-      if(scaleInput){
-        if(this->bounceClock > 500){
-          this->scale = (this->scale + 1) % 8;
-          this->display->keepCurrentDisplay();
-          this->bounceClock = 0;
-        }
-      }
-    }
+    default:
     break;
-    case DisplayMode::Accent:
-//      this->display->setCurrentDisplay(DisplayMode::Accent);
-      break;
   }
 
-  // Tempo
-  int tempoInput = device->getInput(8);
-  if(tempoInput != 0){
-    this->tempo += tempoInput;
-    if(this->tempo > 0){
-      this->setTempo(this->tempo);
-    }else{
-      this->setTempo(0);
-    }
-  }
-  
-//  bool playInput = this->device->getEncoderSwitch(8);
-  if(this->device->getEncoderSwitch(8)){
-    // Play / Stop
-    if(this->bounceClock > 500){
-      this->play = !this->play;
-      this->currentStep = 0;
-      this->bounceClock = 0;
-      this->stepClock = 0;
-      this->beatCount = 0;
-      if(!this->play){
-        this->sendStop();
+  // Clock
+  switch(this->clockMode){
+    case ClockMode::Leading:
+      if(this->tempo > 0 && this->ticksClock >= this->timeBetweenTicks){
+//        MIDI.sendClock();
+        this->ticksClock = 0;
       }
-    }
+    break;
+    
+    case ClockMode::Following:
+    break;
   }
-
+      
   if(this->tempo > 0 && this->stepClock >= this->timeBetweenSteps){
     this->stepClock = 0;
 
-    this->beatCount++;
-    this->beatCount = this->beatCount % 4;
-
-    // Display the tempo
-    if(this->beatCount == 0){
-      this->device->setDisplay(8, 4);  
-    }
-
     // Moving steps
-    if (this->play) {
+    if (this->isPlaying) {
       this->sendNoteOff(this->notes[this->currentStep]);
       this->activeNotes[this->currentStep] = false;
   
@@ -252,14 +219,9 @@ inline void Cycle::update(){
       }
       
       this->currentStep = constrain(this->currentStep, 0, 7);
-
-      if(this->notes[this->currentStep] > 0){
-        this->sendNoteOn(this->notes[this->currentStep]);
-        this->activeNotes[this->currentStep] = true;
-      }else{
-        this->sendNoteOff(this->notes[this->currentStep]);
-        this->activeNotes[this->currentStep] = false;
-      }
+      
+      // Step increment
+      this->onStepIncrement();
     }
     else{
       // If not playing then stop any note still active
@@ -282,6 +244,7 @@ inline byte Cycle::getCurrentStep(){
 inline void Cycle::setTempo(byte tempo){
   this->tempo = tempo;
   this->timeBetweenSteps = (float)1/tempo*60*1000/4;
+  this->timeBetweenTicks = (float)1/tempo*60*1000/24;
 }
 
 inline void Cycle::sendNoteOn(byte note){
@@ -294,8 +257,11 @@ inline void Cycle::sendNoteOff(byte note){
   usbMIDI.sendNoteOff(note, 127, this->device->getMidiChannel());
 }
 
+inline void Cycle::sendStart(){
+  MIDI.sendStart();
+}
 inline void Cycle::sendStop(){
-//  MIDI.sendRealTime(MIDI_NAMESPACE::Stop);
+  MIDI.sendStop();
   for(byte i=0; i<8; i++){
     this->sendNoteOff(this->notes[i]);
     this->activeNotes[i] = false;
@@ -336,5 +302,213 @@ inline byte Cycle::getDirectionIndex(){
   }
 
   return 0;
+}
+
+
+
+/**
+ * Midi Song position callback
+ */
+inline void Cycle::onSongPosition(unsigned songPosition){
+  switch(getInstance()->clockMode){
+    case ClockMode::Following:
+      Serial.print("onSongPosition ");
+      Serial.println(songPosition);
+      getInstance()->currentStep = songPosition % 8;
+      
+      // Step increment
+      getInstance()->onStepIncrement();
+    break;
+    
+    default:
+    break;
+  }
+}
+
+/**
+ * Midi Start callback
+ */
+inline void Cycle::onStart(){
+  switch(getInstance()->clockMode){
+    case ClockMode::Following:
+      Serial.println("onStart");
+    break;
+    
+    default:
+    break;
+  }
+}
+
+/**
+ * Midi Stop callback
+ */
+inline void Cycle::onStop(){
+  switch(getInstance()->clockMode){
+    case ClockMode::Following:
+      Serial.println("onStop");
+    break;
+    
+    default:
+    break;
+  }
+}
+
+/**
+ * On Clock short press 
+ */
+inline void Cycle::onClockShortPress(byte inputIndex){
+  switch(getInstance()->display->getCurrentDisplayMode()){
+    case DisplayMode::Sequencer:
+      // Play / Stop
+      getInstance()->isPlaying = !getInstance()->isPlaying;
+      getInstance()->currentStep = 0;
+      getInstance()->bounceClock = 0;
+      getInstance()->stepClock = 0;
+      if(!getInstance()->isPlaying){
+        getInstance()->sendStop();
+      }
+    break;
+    
+    case DisplayMode::Clock:
+      // Exiting the Clock mode
+      getInstance()->display->setCurrentDisplay(DisplayMode::Sequencer);
+    break;
+    
+    default:
+    break;
+  }
+}
+
+/**
+ * On Clock long press 
+ */
+inline void Cycle::onClockLongPress(byte inputIndex){
+  switch(getInstance()->display->getCurrentDisplayMode()){
+    case DisplayMode::Sequencer:
+      // Entering in Clock mode
+      getInstance()->display->setCursor(getInstance()->clockMode);
+      getInstance()->display->setCurrentDisplay(DisplayMode::Clock);
+    break;
+
+    default:
+    break;
+  }
+}
+
+/**
+ * On Clock change 
+ */
+inline void Cycle::onClockChange(bool value){
+  int inValue = 1;
+  if(!value){
+    inValue = -1;
+  }
+  
+  switch(getInstance()->display->getCurrentDisplayMode()){
+    case DisplayMode::Sequencer:
+      getInstance()->tempo += inValue;
+      if(getInstance()->tempo > 0){
+        getInstance()->setTempo(getInstance()->tempo);
+      }else{
+        getInstance()->setTempo(0);
+      }
+    break;
+    
+    case DisplayMode::Clock:
+      getInstance()->clockMode = ClockMode( (getInstance()->clockMode + inValue) % 2 );
+      getInstance()->display->setCursor(getInstance()->clockMode);
+    break;
+
+    default:
+    break;
+  }
+}
+
+
+/**
+ * On Direction press 
+ */
+inline void Cycle::onDirectionPress(byte inputIndex){
+  Serial.println("onDirectionPress");
+  switch(getInstance()->display->getCurrentDisplayMode()){
+    case DisplayMode::Sequencer:
+      getInstance()->display->setCursor(getInstance()->getDirectionIndex());
+      getInstance()->display->setCurrentDisplay(DisplayMode::Direction);
+    break;  
+    
+    case DisplayMode::Direction:
+    {
+      getInstance()->iterateDirection();
+      getInstance()->display->setCursor(getInstance()->getDirectionIndex());
+      getInstance()->display->keepCurrentDisplay();
+      break;
+    }  
+    default:
+    break;
+  }
+}
+
+/**
+ * On Scale press 
+ */
+inline void Cycle::onScalePress(byte inputIndex){
+  switch(getInstance()->display->getCurrentDisplayMode()){
+    case DisplayMode::Sequencer:
+      getInstance()->display->setCursor(getInstance()->scale);
+      getInstance()->display->setCurrentDisplay(DisplayMode::Scale);
+    break;  
+        
+    case DisplayMode::Scale:
+    {
+      getInstance()->scale = (getInstance()->scale + 1) % 8;
+      getInstance()->display->setCursor(getInstance()->scale);
+      getInstance()->display->keepCurrentDisplay();
+    }
+    break;  
+    default:
+    break;
+  }
+}
+
+/**
+ * On Accent press 
+ */
+inline void Cycle::onAccentPress(byte inputIndex){
+  switch(getInstance()->display->getCurrentDisplayMode()){
+    case DisplayMode::Sequencer:
+      getInstance()->display->setCurrentDisplay(DisplayMode::Accent);
+    break;    
+    default:
+    break;
+  }
+}
+
+inline void Cycle::onStepIncrement(){
+  switch(this->display->getCurrentDisplayMode()){
+    case DisplayMode::Sequencer:
+    case DisplayMode::Direction:
+    case DisplayMode::Scale:
+      if(this->notes[this->currentStep] > 0){
+        this->sendNoteOn(this->notes[this->currentStep]);
+        this->activeNotes[this->currentStep] = true;
+      }else{
+        this->sendNoteOff(this->notes[this->currentStep]);
+        this->activeNotes[this->currentStep] = false;
+      }
+    break;
+    
+    default:
+    break;
+  }
+
+  // Song position
+//  switch(this->clockMode){
+//    case ClockMode::Leading:
+//      MIDI.sendSongPosition(this->currentStep);
+//    break;
+//    
+//    default:
+//    break;
+//  }
 }
 #endif
