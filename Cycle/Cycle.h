@@ -28,6 +28,9 @@ class Cycle{
     unsigned int timeBetweenTicks = 0;
     elapsedMillis stepClock;
     elapsedMillis ticksClock;
+    byte ticksReadings;
+    elapsedMillis lastTick;
+    unsigned int *ticks;
 
     enum Direction { Forward, Backward, Pendulum, Transposer };
     Direction direction = Forward;
@@ -60,6 +63,7 @@ class Cycle{
     void sendStop();
     
     // Midi callbacks
+    static void onClock();
     static void onSongPosition(unsigned beats);
     static void onStart();
     static void onStop();
@@ -90,6 +94,12 @@ inline Cycle::Cycle(){
   this->display = new Display();
   this->setTempo(60);
 
+  this->ticksReadings = 0;
+  this->ticks = new unsigned int[20];
+  for (byte i = 0; i < 20; i++) {
+    this->ticks[i] = 0;
+  }
+
   for(byte i=0; i<8; i++){
     this->notes[i] = 0;
   }
@@ -118,6 +128,7 @@ inline void Cycle::init(){
   
   // Midi callbacks
   MIDI.setHandleSongPosition(onSongPosition);
+  MIDI.setHandleClock(onClock);
   MIDI.setHandleStart(onStart);
   MIDI.setHandleStop(onStop);
   MIDI.begin(this->device->getMidiChannel());
@@ -305,6 +316,42 @@ inline byte Cycle::getDirectionIndex(){
 }
 
 
+/**
+ * Midi clock callback
+ */
+inline void Cycle::onClock(){
+  switch(getInstance()->clockMode){
+    case ClockMode::Following:
+
+      if(getInstance()->ticksReadings == 0){
+        getInstance()->lastTick = 0;
+      }else{
+        getInstance()->ticks[getInstance()->ticksReadings] = getInstance()->lastTick;
+        getInstance()->lastTick = 0;
+      }
+      
+      if (getInstance()->ticksReadings == 20) {
+        unsigned int averageTime = 0;
+        for (byte i = 0; i < 20; i++) {
+          averageTime += getInstance()->ticks[i];
+        }
+        averageTime = averageTime / 19; // index 0 is always 0
+        getInstance()->setTempo((byte)((float)1/averageTime*60*1000/24));
+
+        // Reinit the ticks
+        getInstance()->ticksReadings = 0;
+        for (byte i = 0; i < 20; i++) {
+          getInstance()->ticks[i] = 0;
+        }
+      }else{
+        getInstance()->ticksReadings++;
+      }
+    break;
+    
+    default:
+    break;
+  }
+}
 
 /**
  * Midi Song position callback
@@ -312,12 +359,13 @@ inline byte Cycle::getDirectionIndex(){
 inline void Cycle::onSongPosition(unsigned songPosition){
   switch(getInstance()->clockMode){
     case ClockMode::Following:
-      Serial.print("onSongPosition ");
-      Serial.println(songPosition);
-      getInstance()->currentStep = songPosition % 8;
-      
-      // Step increment
-      getInstance()->onStepIncrement();
+      if(songPosition == 0){
+//        getInstance()->currentStep = songPosition % 8;
+        getInstance()->currentStep = 0;
+        
+        // Step increment
+        getInstance()->onStepIncrement();
+      }
     break;
     
     default:
