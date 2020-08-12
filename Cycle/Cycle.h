@@ -42,6 +42,7 @@ class Cycle{
       {0,0,3,3,4,4,6,6,8,9,10,10} // Aeolian flat 1
     };
     byte scale = 0;
+    byte octave = 5;
     byte tempo = 0;
     elapsedMillis bounceClock;
     byte notes[8];
@@ -77,8 +78,8 @@ class Cycle{
     static void onDirectionPress(byte inputIndex);
     // Scale
     static void onScalePress(byte inputIndex);
-    // Accent
-    static void onAccentPress(byte inputIndex);
+    // Octave
+    static void onOctavePress(byte inputIndex);
     
     void onStepIncrement();
 };
@@ -139,6 +140,7 @@ inline void Cycle::init(){
   this->device->setHandleRotaryChange(8, onClockChange);
   this->device->setHandlePressUp(9, onDirectionPress);
   this->device->setHandlePressUp(10, onScalePress);
+  this->device->setHandlePressUp(11, onOctavePress);
 }
 
 inline void Cycle::update(){
@@ -158,7 +160,7 @@ inline void Cycle::update(){
         if(noteInput == 0){
           this->notes[i] = 0;
         }else{
-          byte note = map(this->device->getInput(i), this->device->getAnalogMinValue(), this->device->getAnalogMaxValue(), 60, 84);
+          byte note = map(this->device->getInput(i), this->device->getAnalogMinValue(), this->device->getAnalogMaxValue(), 0, 24);
           if(this->scale > 0){
             byte octave = note / 12;
             note = 12 * octave + this->scales[this->scale][note % 12];
@@ -169,7 +171,7 @@ inline void Cycle::update(){
             this->sendNoteOn(note);
             this->activeNotes[i] = true;
           }
-          this->notes[i] = note;
+          this->notes[i] = 12 * this->octave + note;
         }
       }
       
@@ -183,7 +185,7 @@ inline void Cycle::update(){
   switch(this->clockMode){
     case ClockMode::Leading:
       if(this->tempo > 0 && this->ticksClock >= this->timeBetweenTicks){
-//        MIDI.sendClock();
+        MIDI.sendClock();
         this->ticksClock = 0;
       }
     break;
@@ -519,13 +521,21 @@ inline void Cycle::onScalePress(byte inputIndex){
 }
 
 /**
- * On Accent press 
+ * On Octave press 
  */
-inline void Cycle::onAccentPress(byte inputIndex){
+inline void Cycle::onOctavePress(byte inputIndex){
   switch(getInstance()->display->getCurrentDisplayMode()){
     case DisplayMode::Sequencer:
-      getInstance()->display->setCurrentDisplay(DisplayMode::Accent);
-    break;    
+      getInstance()->display->setCursor(getInstance()->octave);
+      getInstance()->display->setCurrentDisplay(DisplayMode::Octave);
+    break; 
+    
+    case DisplayMode::Octave:
+      getInstance()->octave = (getInstance()->octave + 1) % 8;
+      getInstance()->display->setCursor(getInstance()->octave);
+      getInstance()->display->keepCurrentDisplay();
+    break;
+       
     default:
     break;
   }
@@ -550,13 +560,13 @@ inline void Cycle::onStepIncrement(){
   }
 
   // Song position
-//  switch(this->clockMode){
-//    case ClockMode::Leading:
-//      MIDI.sendSongPosition(this->currentStep);
-//    break;
-//    
-//    default:
-//    break;
-//  }
+  switch(this->clockMode){
+    case ClockMode::Leading:
+      MIDI.sendSongPosition(this->currentStep);
+    break;
+    
+    default:
+    break;
+  }
 }
 #endif

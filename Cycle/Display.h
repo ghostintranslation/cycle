@@ -3,7 +3,7 @@
 
 #include "Motherboard12.h"
 
-enum DisplayMode { Clock, Sequencer, Direction, Scale, Accent };
+enum DisplayMode { Clock, Sequencer, Direction, Scale, Octave };
 
 /*
    Display
@@ -21,7 +21,7 @@ class Display {
     void displaySequencer();
     void displayDirection();
     void displayScale();
-    void displayAccent();
+    void displayOctave();
 
   public:
     Display();
@@ -63,8 +63,8 @@ inline void Display::update() {
         this->currentDisplay = Sequencer;
       }
     break;
-    case Accent:
-      this->displayAccent();
+    case Octave:
+      this->displayOctave();
         // Go back to Pattern display after 1000ms
       if (this->clock_count_display >= 1000) {
         this->currentDisplay = Sequencer;
@@ -81,10 +81,8 @@ inline void Display::update() {
 
 
 inline void Display::setCurrentDisplay(DisplayMode displayMode) {
-  //  if(this->currentDisplay != displayMode){
   this->currentDisplay = displayMode;
   this->clock_count_display = 0;
-  //  }
 }
 
 /**
@@ -97,33 +95,21 @@ inline void Display::displayClock() {
 
 inline void Display::displayDirection() {
   this->device->resetAllLED();
-
-  for(byte i=0; i<4; i++){
-    this->device->setLED(i, 1);
-  }
   this->device->setLED(this->cursorIndex, 2);
 }
 
 inline void Display::displayScale() {
   this->device->resetAllLED();
-
-  this->device->resetAllLED();
-
-  for(byte i=0; i<8; i++){
-    this->device->setLED(i, 1);
-  }
   this->device->setLED(this->cursorIndex, 2);
 }
 
-inline void Display::displayAccent() {
+inline void Display::displayOctave() {
   this->device->resetAllLED();
-
+  this->device->setLED(this->cursorIndex, 2);
 }
 
 inline void Display::displaySequencer(){
-  for(byte i=0; i<8; i++){
-    this->device->setLED(i, 0);
-  }
+  this->device->resetAllLED();
   this->device->setLED(cursorIndex, 1);
 }
 
