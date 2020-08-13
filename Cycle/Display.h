@@ -13,6 +13,7 @@ class Display {
     Motherboard12 *device;
     DisplayMode currentDisplay;
     byte cursorIndex = 0;
+    byte data[3];
     elapsedMillis clock_count;
     elapsedMillis clock_count_blink;
     elapsedMillis clock_count_display;
@@ -29,6 +30,7 @@ class Display {
     void setCurrentDisplay(DisplayMode displayMode);
     DisplayMode getCurrentDisplayMode();
     void setCursor(byte index);
+    void setData(byte data[3]);
     void keepCurrentDisplay();
 };
 
@@ -110,7 +112,14 @@ inline void Display::displayOctave() {
 
 inline void Display::displaySequencer(){
   this->device->resetAllLED();
-  this->device->setLED(cursorIndex, 1);
+
+  // Used by Transposer
+  for(byte i=0; i<8; i++){
+  
+    // Set the LED solid or off
+    byte ledOn = bitRead(this->data[0], i);
+    this->device->setLED(i, ledOn);
+  }
 }
 
 inline DisplayMode Display::getCurrentDisplayMode(){
@@ -119,6 +128,15 @@ inline DisplayMode Display::getCurrentDisplayMode(){
 
 inline void Display::setCursor(byte cursorIndex){
   this->cursorIndex = cursorIndex;
+}
+
+/**
+ * Set the display's datas
+ */
+inline void Display::setData(byte data[3]){
+  for(byte i=0; i<3; i++){
+    this->data[i] = data[i];
+  }
 }
 
 inline void Display::keepCurrentDisplay(){
