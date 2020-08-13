@@ -35,11 +35,15 @@ class Cycle{
     enum Direction { Forward, Backward, Pendulum, Transposer };
     Direction direction = Forward;
     bool pendulumState = true;
-    byte scales[4][12] = {
-      {0,1,2,3,4,5,6,7,8,9,10,11}, // All notes
-      {0,1,2,3,3,5,5,7,7,9,10,10}, // Adonai Malakh (Israel)
-      {0,0,3,3,5,5,6,6,7,7,10,10}, // Blues
-      {0,0,3,3,4,4,6,6,8,9,10,10} // Aeolian flat 1
+    byte scales[8][12] = {
+      {0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10,11}, // All notes
+      {0, 0, 2, 2, 4, 4, 5, 5, 7, 9, 9,11}, // Major
+      {0, 0, 2, 2, 4, 4, 7, 7, 7, 9, 9, 9}, // Major pentatonic
+      {0, 0, 3, 3, 5, 5, 5, 7, 7, 7,10,10}, // Minor pentatonic
+      {0, 2, 2, 3, 3, 5, 5, 7, 7, 8, 8,11}, // Harmonic minor
+      {0, 2, 2, 3, 3, 5, 5, 7, 7, 9, 9,11}, // Melodic minor
+      {0, 2, 2, 3, 3, 5, 5, 6, 6, 8, 9,11}, // Diminished
+      {0, 0, 1, 1, 5, 5, 7, 7, 7,10,10,10}, // Insen
     };
     byte scale = 0;
     byte octave = 5;
@@ -161,17 +165,16 @@ inline void Cycle::update(){
           this->notes[i] = 0;
         }else{
           byte note = map(this->device->getInput(i), this->device->getAnalogMinValue(), this->device->getAnalogMaxValue(), 0, 24);
-          if(this->scale > 0){
-            byte octave = note / 12;
-            note = 12 * octave + this->scales[this->scale][note % 12];
-          }
+          byte noteOctave = note / 12;
+          note = 12 * this->octave + 12 * noteOctave + this->scales[this->scale][note % 12];
+          
           // If the sequencer is not playing and a step has changed
           if(!this->isPlaying && note != this->notes[i] && !this->activeNotes[i]){
             // Play the note
             this->sendNoteOn(note);
             this->activeNotes[i] = true;
           }
-          this->notes[i] = 12 * this->octave + note;
+          this->notes[i] = note;
         }
       }
       
@@ -479,7 +482,6 @@ inline void Cycle::onClockChange(bool value){
  * On Direction press 
  */
 inline void Cycle::onDirectionPress(byte inputIndex){
-  Serial.println("onDirectionPress");
   switch(getInstance()->display->getCurrentDisplayMode()){
     case DisplayMode::Sequencer:
       getInstance()->display->setCursor(getInstance()->getDirectionIndex());
@@ -546,6 +548,7 @@ inline void Cycle::onStepIncrement(){
     case DisplayMode::Sequencer:
     case DisplayMode::Direction:
     case DisplayMode::Scale:
+    case DisplayMode::Octave:
       if(this->notes[this->currentStep] > 0){
         this->sendNoteOn(this->notes[this->currentStep]);
         this->activeNotes[this->currentStep] = true;

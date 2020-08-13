@@ -95,17 +95,17 @@ inline void Display::displayClock() {
 
 inline void Display::displayDirection() {
   this->device->resetAllLED();
-  this->device->setLED(this->cursorIndex, 2);
+  this->device->setLED(this->cursorIndex, 3);
 }
 
 inline void Display::displayScale() {
   this->device->resetAllLED();
-  this->device->setLED(this->cursorIndex, 2);
+  this->device->setLED(this->cursorIndex, 3);
 }
 
 inline void Display::displayOctave() {
   this->device->resetAllLED();
-  this->device->setLED(this->cursorIndex, 2);
+  this->device->setLED(this->cursorIndex, 3);
 }
 
 inline void Display::displaySequencer(){
