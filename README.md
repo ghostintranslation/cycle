@@ -1,4 +1,7 @@
 # CYCLE
+
+![GitHub version](https://img.shields.io/github/v/release/ghostintranslation/cycle.svg?include_prereleases)
+
 CYCLE is a modular monophonic sequencer, based on eurorack physical format it has however no patch cables in the front but has rather midi jacks in the back.
 
 It is based on [Motherboard12](https://github.com/ghostintranslation/motherboard12).
@@ -10,9 +13,9 @@ NOTE: This is a work in progress.
 ## Features
 
 * 8 steps
-* Forward, Backward, Pendulum, Transposer modes
+* Forward, Backward, Sawtooth, Pendulum, Transposer, Pendulum Transposer, Alternate Transposer, Random modes
 * Scales
-* Accents
+* Octaves
 * MIDI over USB
 * MIDI over mini jack
 
@@ -56,59 +59,64 @@ Here is a description of the 6 inputs and what they do:
 ```
 1. Default screen
     - Each pair of LED-Potentiometer represent a step.
-    - The LED indicates when the step is active
-    - The potentiometer sets the note of the step within 2 octaves
+    - The LED indicates when the step is active.
+    - The potentiometer sets the note of the step within 2 octaves.
         - At 0 the note is muted
 2. Clock
     1. Usage
-        1. If MIDI clock is received                        (TODO)
-            - The sequencer sync with the received tempo
-            - The rotary acts as a clock divider selector
-            - Turning the rotary will enter the Divider screen
-        2. If no MIDI clock is received
-            - The sequencer sends midi clock messages       (TODO)
-            - The rotary sets the tempo from 10 to 200bpm
-        3. Clicking will toggle Play
+        - A long press on the Clock rotary will enter the Clock mode screen.
+        - Turn the rotary while in this mode to select between Follower and Leader modes.
+        - Press to validate and exit
+        1. Leader
+            - Sends MIDI clock and song position messages
+            - Turn the rotary to increments or decrements the tempo
+            - Press to toggle Play/Stop
+        2. Follower
+            - Synchronize its steps to the received clocks and song position messages
+            - Turn the rotary to choose between 8 values to divide the received clock   (TODO)
+            - Press to toggle Play/Stop
     2. Display
-        - Tempo is indicaded by the LED above the Clock rotary
-        - Divider screen                                    (TODO)
-            - Turning the rotary will allow selection from no division to division by 16
-            - Active selection is indicated by a blinking LED witin 8 solid lit LED
+        - Leader is a slow blink, Follower is a fast blink
 3. Direction
     1. Usage
-        - Push once the Direction button to enter the Direction screen
-        - Push again the button while in this screen to change the Direction
+        - Press once the Direction button to enter the Direction screen.
+        - Press again the button while in this screen to change the Direction.
     2. Modes
-        1. Forward,
+        1. Forward
         2. Backward
         3. Pendulum
             - Going forward and backward alternatively
-        4. Forward Transposer                               (TODO)
+        4. Sawtooth
+            - 1,5,2,6,3,7,4,8
+        5. Transposer
             - The bar becomes 4 steps. The 4 steps at the top are being transposed by the 4 steps at the bottom. 
+        6. Pendulum Transposer
+        7. Alternate Transposer
+            - Alternates between 4 top steps and 4 bottom steps being transposed by 1 alternating step on the oposite side.
+        8. Random
+            - Random steps, avoid repeating notes by leaving blanks.
     3. Display
-        - The selected direction is indicated by a blinking LED 
-        - Screen stays 1s after last push
-4. Scale                                                    (TODO)
+        - The selected direction is indicated by a blinking LED.
+        - Screen stays 1s after last press.
+4. Scale
     1. Usage
-        - Push once the Scale button to enter the Scale screen
-        - Push again the button while in this screen to change the Scale
-        - Choose between no scale (first choice) and 7 scales
+        - Press once the Scale button to enter the Scale screen.
+        - Press again the button while in this screen to change the Scale.
+        - Choose between no scale (first choice) and 7 scales.
     2. Display
-        - The selected scale is indicated by a blinking LED 
-        - Screen stays 1s after last push
-5. Accent                                                   (TODO)
+        - The selected scale is indicated by a blinking LED.
+        - Screen stays 1s after last press.
+5. Octave
     1. Usage
-        - Push once the Accent button to enter the Accent screen
-        - Push again the button while in this screen to toggle accent on the active step
-        - Long click will reset all accents
+        - Press once the Octave button to enter the Octave screen.
+        - Press again the button while in this screen to change the Octave.
     2. Display
-        - The active step is indicated by a blinking LED 
-        - Steps with accents are indicated by a solid lit LED
-        - Screen stays 2s after last push
+        - The selected octave is indicated by a blinking LED.
+        - Screen stays 1s after last press.
 ```
 
 ## About me
-You can find me on Bandcamp and Instagram:
+You can find me on Bandcamp, Instagram, Youtube and mu own website:
 
 https://ghostintranslation.bandcamp.com/
 
