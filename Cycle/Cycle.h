@@ -25,6 +25,7 @@ class Cycle{
     bool isPlaying = true;
     byte currentStep = 0;
     byte currentTransposerBar = 0;
+    byte previousNotePlayed = 0;
     unsigned int timeBetweenSteps = 0;
     unsigned int timeBetweenTicks = 0;
     elapsedMillis stepClock;
@@ -33,7 +34,7 @@ class Cycle{
     elapsedMillis lastTick;
     unsigned int *ticks;
 
-    enum Direction { Forward, Backward, Pendulum, Transposer, PendulumTransposer };
+    enum Direction { Forward, Backward, Pendulum, Sawtooth, Transposer, PendulumTransposer, AlternateTransposer, Random};
     Direction direction = Forward;
     bool pendulumState = true;
     byte scales[8][12] = {
@@ -169,6 +170,17 @@ inline void Cycle::update(){
           this->display->setData(data);
         }
         break;
+        case AlternateTransposer:
+        { 
+          // Displaying the current step and the current bar
+          byte ledsCurrentStep = 0;
+          ledsCurrentStep |= 1 << this->currentStep;
+          byte ledsCurrentTransposerBar = 0;
+          ledsCurrentTransposerBar |= 1 << (this->currentTransposerBar);
+          byte data[3] = {ledsCurrentStep, ledsCurrentTransposerBar, 0};
+          this->display->setData(data);
+        }
+        break;
 
         default:
         {
@@ -283,6 +295,46 @@ inline void Cycle::update(){
           }
           this->currentStep = constrain(this->currentStep, 0, 3);
         break;
+        
+        case AlternateTransposer:
+        
+          if(this->currentTransposerBar == 0 && this->currentStep == 0){
+            this->currentStep = 4;
+          }else{
+            
+            if(this->currentStep == 4){
+              if(this->currentTransposerBar == 7){
+                this->currentTransposerBar = 0;
+              }else{
+                this->currentTransposerBar -= 3;
+              }
+            }
+          }
+          
+          this->currentStep++;
+
+          if(this->currentStep == 8){
+            this->currentTransposerBar += 4;
+            this->currentStep = 0;
+          }
+          
+        break;
+        
+        case Sawtooth:
+          if(this->currentStep == 7){
+            this->currentStep = 0;
+          }else{
+            if(this->currentStep < 4){
+              this->currentStep += 4;
+            }else{
+              this->currentStep -=3;
+            }
+          }
+        break;
+        
+        case Random:
+          this->currentStep = rand() % 8;
+        break;
       }
       
       this->currentStep = constrain(this->currentStep, 0, 7);
@@ -344,12 +396,21 @@ inline void Cycle::iterateDirection(){
       this->direction = Pendulum;
     break;
     case Pendulum:
+      this->direction = Sawtooth;
+    break;
+    case Sawtooth:
       this->direction = Transposer;
     break;
     case Transposer:
       this->direction = PendulumTransposer;
     break;
     case PendulumTransposer:
+      this->direction = AlternateTransposer;
+    break;
+    case AlternateTransposer:
+      this->direction = Random;
+    break;
+    case Random:
       this->direction = Forward;
     break;
   }
@@ -366,12 +427,22 @@ inline byte Cycle::getDirectionIndex(){
     case Pendulum:
       return 2;
     break;
-    case Transposer:
+    case Sawtooth:
       return 3;
     break;
-    case PendulumTransposer:
+    case Transposer:
       return 4;
     break;
+    case PendulumTransposer:
+      return 5;
+    break;
+    case AlternateTransposer:
+      return 6;
+    break;
+    case Random:
+      return 7;
+    break;
+    
   }
 
   return 0;
@@ -608,6 +679,7 @@ inline void Cycle::onStepIncrement(){
     case DisplayMode::Octave:
     {
       byte noteToPlay = this->notes[this->currentStep];
+      bool temporaryMute = false;
       switch(this->direction){
         case Transposer:
         case PendulumTransposer:
@@ -615,16 +687,32 @@ inline void Cycle::onStepIncrement(){
           noteToPlay = noteToPlay + this->notes[4 + this->currentTransposerBar] - 12*this->octave;
         }
         break;
+        
+        case AlternateTransposer:
+        {
+          noteToPlay = noteToPlay + this->notes[this->currentTransposerBar] - 12*this->octave;
+        }
+        break;
+
+        case Random:
+          if(noteToPlay == this->previousNotePlayed){
+            temporaryMute = true;
+          }
+          this->previousNotePlayed = noteToPlay;
+        break;
+        
         default:
         break;
       }
-      
-      if(noteToPlay > 0){
-        this->sendNoteOn(noteToPlay);
-        this->activeNotes[this->currentStep] = true;
-      }else{
-        this->sendNoteOff(noteToPlay);
-        this->activeNotes[this->currentStep] = false;
+
+      if(!temporaryMute){
+        if(noteToPlay > 0){
+          this->sendNoteOn(noteToPlay);
+          this->activeNotes[this->currentStep] = true;
+        }else{
+          this->sendNoteOff(noteToPlay);
+          this->activeNotes[this->currentStep] = false;
+        }
       }
     }
     break;

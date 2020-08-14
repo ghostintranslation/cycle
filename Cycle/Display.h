@@ -115,10 +115,21 @@ inline void Display::displaySequencer(){
 
   // Used by Transposer
   for(byte i=0; i<8; i++){
-  
-    // Set the LED solid or off
-    byte ledOn = bitRead(this->data[0], i);
-    this->device->setLED(i, ledOn);
+
+    // Set the LED off
+    this->device->setLED(i, 0);
+      
+    // Set the LED solid
+    byte solidLed = bitRead(this->data[0], i);
+    if(solidLed){
+      this->device->setLED(i, 1);
+    }
+    
+    // Set the LED to blink
+    byte blinkingLed = bitRead(this->data[1], i);
+    if(blinkingLed){
+      this->device->setLED(i, 3);
+    }
   }
 }
 
