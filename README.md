@@ -13,9 +13,9 @@ NOTE: This is a work in progress.
 ## Features
 
 * 8 steps
-* Forward, Backward, Sawtooth, Pendulum, Transposer, Pendulum Transposer, Alternate Transposer, Random modes
-* Scales
-* Octaves
+* 8 modes
+* 8 scales
+* 8 octaves
 * MIDI over USB
 * MIDI over mini jack
 
