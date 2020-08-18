@@ -28,7 +28,7 @@ What things you need to make it work:
 ```
 1 Teensy 4.0
 1 MOTHERBOARD12A pcb
-1 MOTHERBOARD9B pcb
+1 MOTHERBOARD12B pcb
 1 CYCLE front panel pcb
 8 vertical potentiometers 10K
 1 vertical rotary encoder
@@ -36,9 +36,9 @@ What things you need to make it work:
 4 14 pins male header
 6 14 pins female header
 8 CD4051 multiplexers
-8 DIP16 IC sockets (optionak)
+8 DIP16 IC sockets (optional)
 2 3.5mm jack connectors
-1 resistor ~ 80ohm
+1 resistor ~ 22ohm
 1 4 positions dipswitch (optional)
 ```
 
@@ -53,8 +53,6 @@ In the Tools -> USB Type menu, choose "Serial + midi".
 Then you are ready to compile and upload the sketch.
 
 # How to use
-
-Here is a description of the 6 inputs and what they do:
 
 ```
 1. Default screen
