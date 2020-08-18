@@ -698,7 +698,6 @@ inline void Cycle::onStepIncrement(){
           if(noteToPlay == this->previousNotePlayed){
             temporaryMute = true;
           }
-          this->previousNotePlayed = noteToPlay;
         break;
         
         default:
@@ -707,7 +706,9 @@ inline void Cycle::onStepIncrement(){
 
       if(!temporaryMute){
         if(noteToPlay > 0){
+          this->sendNoteOff(this->previousNotePlayed);
           this->sendNoteOn(noteToPlay);
+          this->previousNotePlayed = noteToPlay;
           this->activeNotes[this->currentStep] = true;
         }else{
           this->sendNoteOff(noteToPlay);
