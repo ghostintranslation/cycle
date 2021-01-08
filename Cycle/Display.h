@@ -3,11 +3,11 @@
 
 #include "Motherboard12.h"
 
-enum DisplayMode { Clock, Sequencer, Direction, Scale, Octave };
+enum DisplayMode { Clock, ClockDivision, Sequencer, Direction, Scale, Octave, NoteChange };
 
-/*
-   Display
-*/
+/**
+ * Display
+ */
 class Display {
   private:
     Motherboard12 *device;
@@ -19,10 +19,12 @@ class Display {
     elapsedMillis clock_count_display;
     const byte interval_time = 50;
     void displayClock();
+    void displayClockDivision();
     void displaySequencer();
     void displayDirection();
     void displayScale();
     void displayOctave();
+    void displayNoteChange();
 
   public:
     Display();
@@ -36,18 +38,29 @@ class Display {
 
 
 /**
-   Constructor
-*/
+ * Constructor
+ */
 inline Display::Display() {
   this->device = Motherboard12::getInstance();
   this->currentDisplay = Sequencer;
 }
 
+/**
+ * Update
+ */
 inline void Display::update() {
   switch (this->currentDisplay) {
     // Clock display
     case Clock:
       this->displayClock();
+    break;
+    
+    case ClockDivision:
+      this->displayClockDivision();
+        // Go back to Pattern display after 1000ms
+      if (this->clock_count_display >= 1000) {
+        this->currentDisplay = Sequencer;
+      }
     break;
     
     case Direction:
@@ -58,6 +71,7 @@ inline void Display::update() {
         this->currentDisplay = Sequencer;
       }
     break;
+    
     case Scale:
       this->displayScale();
         // Go back to Pattern display after 1000ms
@@ -65,6 +79,7 @@ inline void Display::update() {
         this->currentDisplay = Sequencer;
       }
     break;
+    
     case Octave:
       this->displayOctave();
         // Go back to Pattern display after 1000ms
@@ -72,6 +87,15 @@ inline void Display::update() {
         this->currentDisplay = Sequencer;
       }
     break;
+    
+    case NoteChange:
+      this->displayNoteChange();
+        // Go back to Pattern display after 1000ms
+      if (this->clock_count_display >= 1000) {
+        this->currentDisplay = Sequencer;
+      }
+    break;
+    
     case Sequencer:
     default:
       this->displaySequencer();
@@ -81,35 +105,79 @@ inline void Display::update() {
 
 }
 
-
+/**
+ * Set the current display
+ */
 inline void Display::setCurrentDisplay(DisplayMode displayMode) {
   this->currentDisplay = displayMode;
   this->clock_count_display = 0;
 }
 
 /**
- * Clock display
+ * Clock
  */
 inline void Display::displayClock() {
   this->device->resetAllLED();
   this->device->setLED(8, this->cursorIndex + 2);
 }
 
+/**
+ * Clock Division
+ */
+inline void Display::displayClockDivision() {
+  this->device->resetAllLED();
+  this->device->setLED(this->cursorIndex, 3);
+}
+
+/**
+ * Direction
+ */
 inline void Display::displayDirection() {
   this->device->resetAllLED();
   this->device->setLED(this->cursorIndex, 3);
 }
 
+/**
+ * Scale
+ */
 inline void Display::displayScale() {
   this->device->resetAllLED();
   this->device->setLED(this->cursorIndex, 3);
 }
 
+/**
+ * Octave
+ */
 inline void Display::displayOctave() {
   this->device->resetAllLED();
   this->device->setLED(this->cursorIndex, 3);
 }
 
+/**
+ * Note Change
+ */
+inline void Display::displayNoteChange() {
+  this->device->resetAllLED();
+
+  byte chromaticScale[12] = {2, 1, 2, 1, 2, 2, 1, 2, 1, 2, 1, 2}; // Semitones
+  byte note = this->cursorIndex;
+  byte ledIndex = 0;
+  byte ledStatus = chromaticScale[note] == 1 ? 3 : 1;
+  
+  for(byte i=0; i<note; i++){
+    ledIndex += chromaticScale[i] == 2 ? 1 : 0;
+  }
+  
+  for(byte i=0; i<ledIndex; i++){
+    this->device->setLED(i, 1);
+  }
+  
+  this->device->setLED(ledIndex, ledStatus);
+}
+
+/**
+ * Sequencer
+ */
 inline void Display::displaySequencer(){
   this->device->resetAllLED();
 
@@ -133,10 +201,16 @@ inline void Display::displaySequencer(){
   }
 }
 
+/**
+ * Get Current Display
+ */
 inline DisplayMode Display::getCurrentDisplayMode(){
   return currentDisplay;
 }
 
+/**
+ * Set the cursor
+ */
 inline void Display::setCursor(byte cursorIndex){
   this->cursorIndex = cursorIndex;
 }
@@ -150,6 +224,9 @@ inline void Display::setData(byte data[3]){
   }
 }
 
+/**
+ * Keep current display active
+ */
 inline void Display::keepCurrentDisplay(){
   this->clock_count_display = 0;
 }

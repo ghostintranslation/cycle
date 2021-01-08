@@ -50,6 +50,7 @@ class Cycle{
     byte scale = 0;
     byte octave = 5;
     byte tempo = 0;
+    byte division = 1;
     elapsedMillis bounceClock;
     byte notes[8];
     bool activeNotes[8];
@@ -64,6 +65,7 @@ class Cycle{
     void update();
     byte getCurrentStep();
     void setTempo(byte tempo);
+    void updateAllNotes();
     void sendNoteOn(byte note);
     void sendNoteOff(byte note);
     void sendStart();
@@ -76,6 +78,8 @@ class Cycle{
     static void onStop();
     
     // Controls callbacks
+    // Notes
+    static void onNoteChange(byte inputIndex, unsigned int value, int diffToPrevious);
     // Clock
     static void onClockShortPress(byte inputIndex);
     static void onClockLongPress(byte inputIndex);
@@ -141,6 +145,14 @@ inline void Cycle::init(){
   MIDI.begin(this->device->getMidiChannel());
   
   // Device callbacks
+  this->device->setHandlePotentiometerChange(0, onNoteChange);
+  this->device->setHandlePotentiometerChange(1, onNoteChange);
+  this->device->setHandlePotentiometerChange(2, onNoteChange);
+  this->device->setHandlePotentiometerChange(3, onNoteChange);
+  this->device->setHandlePotentiometerChange(4, onNoteChange);
+  this->device->setHandlePotentiometerChange(5, onNoteChange);
+  this->device->setHandlePotentiometerChange(6, onNoteChange);
+  this->device->setHandlePotentiometerChange(7, onNoteChange);
   this->device->setHandlePressUp(8, onClockShortPress);
   this->device->setHandleLongPressUp(8, onClockLongPress);
   this->device->setHandleRotaryChange(8, onClockChange);
@@ -191,26 +203,6 @@ inline void Cycle::update(){
           this->display->setData(data);
         }
         break;
-      }
-
-      // Reading the steps inputs
-      for(byte i=0; i<8; i++){
-        unsigned int noteInput = this->device->getInput(i);
-        if(noteInput == 0){
-          this->notes[i] = 0;
-        }else{
-          byte note = map(this->device->getInput(i), this->device->getAnalogMinValue(), this->device->getAnalogMaxValue(), 0, 24);
-          byte noteOctave = note / 12;
-          note = 12 * this->octave + 12 * noteOctave + this->scales[this->scale][note % 12];
-          
-          // If the sequencer is not playing and a step has changed
-          if(!this->isPlaying && note != this->notes[i] && !this->activeNotes[i]){
-            // Play the note
-            this->sendNoteOn(note);
-            this->activeNotes[i] = true;
-          }
-          this->notes[i] = note;
-        }
       }
       
       break;
@@ -362,7 +354,7 @@ inline byte Cycle::getCurrentStep(){
 
 inline void Cycle::setTempo(byte tempo){
   this->tempo = tempo;
-  this->timeBetweenSteps = (float)1/tempo*60*1000/4;
+  this->timeBetweenSteps = (float)1/tempo*60*1000/(4/(float)this->division);
   this->timeBetweenTicks = (float)1/tempo*60*1000/24;
 }
 
@@ -534,6 +526,30 @@ inline void Cycle::onStop(){
   }
 }
 
+
+/**
+ * On note change 
+ */
+inline void Cycle::onNoteChange(byte inputIndex, unsigned int value, int diffToPrevious){  
+  if(value == 0){
+    getInstance()->notes[inputIndex] = 0;
+  }else{
+    byte mapNote = map(value, getInstance()->device->getAnalogMinValue(), getInstance()->device->getAnalogMaxValue(), 0, 24);
+    byte noteOctave = mapNote / 12;
+    byte note = 12 * getInstance()->octave + 12 * noteOctave + getInstance()->scales[getInstance()->scale][mapNote % 12];
+    
+    // If the sequencer is not playing and a step has changed
+    if(!getInstance()->isPlaying && note != getInstance()->notes[inputIndex] && !getInstance()->activeNotes[inputIndex]){
+      // Play the note
+      getInstance()->sendNoteOn(note);
+      getInstance()->activeNotes[inputIndex] = true;
+      getInstance()->display->setCursor(mapNote%12);
+      getInstance()->display->setCurrentDisplay(DisplayMode::NoteChange);
+    }
+    getInstance()->notes[inputIndex] = note;
+  }
+}
+
 /**
  * On Clock short press 
  */
@@ -587,19 +603,39 @@ inline void Cycle::onClockChange(bool value){
   
   switch(getInstance()->display->getCurrentDisplayMode()){
     case DisplayMode::Sequencer:
-      getInstance()->tempo += inValue;
-      if(getInstance()->tempo > 0){
-        getInstance()->setTempo(getInstance()->tempo);
-      }else{
-        getInstance()->setTempo(0);
+    case DisplayMode::ClockDivision:
+    {
+      switch(getInstance()->clockMode){
+        case ClockMode::Leading:
+          getInstance()->tempo += inValue;
+          if(getInstance()->tempo > 0){
+            getInstance()->setTempo(getInstance()->tempo);
+          }else{
+            getInstance()->setTempo(0);
+          }
+        break;
+
+        case ClockMode::Following:
+          getInstance()->division += inValue;
+          if(getInstance()->division < 1){
+            getInstance()->division = 1;
+          }
+          if(getInstance()->division > 8){
+            getInstance()->division = 8;
+          }
+          getInstance()->setTempo(getInstance()->tempo);
+          getInstance()->display->setCursor(getInstance()->division - 1);
+          getInstance()->display->setCurrentDisplay(DisplayMode::ClockDivision);
+        break;
       }
+    }
     break;
     
     case DisplayMode::Clock:
       getInstance()->clockMode = ClockMode( (getInstance()->clockMode + inValue) % 2 );
       getInstance()->display->setCursor(getInstance()->clockMode);
     break;
-
+    
     default:
     break;
   }
@@ -662,6 +698,7 @@ inline void Cycle::onOctavePress(byte inputIndex){
     
     case DisplayMode::Octave:
       getInstance()->octave = (getInstance()->octave + 1) % 8;
+      getInstance()->updateAllNotes();
       getInstance()->display->setCursor(getInstance()->octave);
       getInstance()->display->keepCurrentDisplay();
     break;
@@ -730,6 +767,30 @@ inline void Cycle::onStepIncrement(){
     
     default:
     break;
+  }
+}
+
+/**
+ * Set all notes according to inputs and octave
+ */
+inline void Cycle::updateAllNotes(){
+  for(byte i=0; i<8; i++){
+    unsigned int noteInput = this->device->getInput(i);
+    if(noteInput == 0){
+      this->notes[i] = 0;
+    }else{
+      byte note = map(this->device->getInput(i), this->device->getAnalogMinValue(), this->device->getAnalogMaxValue(), 0, 24);
+      byte noteOctave = note / 12;
+      note = 12 * this->octave + 12 * noteOctave + this->scales[this->scale][note % 12];
+      
+      // If the sequencer is not playing and a step has changed
+      if(!this->isPlaying && note != this->notes[i] && !this->activeNotes[i]){
+        // Play the note
+        this->sendNoteOn(note);
+        this->activeNotes[i] = true;
+      }
+      this->notes[i] = note;
+    }
   }
 }
 #endif
