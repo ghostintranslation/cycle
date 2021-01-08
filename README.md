@@ -71,7 +71,7 @@ Then you are ready to compile and upload the sketch.
             - Press to toggle Play/Stop
         2. Follower
             - Synchronize its steps to the received clocks and song position messages
-            - Turn the rotary to choose between 8 values to divide the received clock   (TODO)
+            - Turn the rotary to choose between 8 values to divide the received clock
             - Press to toggle Play/Stop
     2. Display
         - Leader is a slow blink, Follower is a fast blink
