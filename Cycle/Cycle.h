@@ -1,11 +1,8 @@
 #ifndef Cycle_h
 #define Cycle_h
 
-#include <MIDI.h>
-MIDI_CREATE_DEFAULT_INSTANCE(); // MIDI library init
-
 #include "Display.h"
-#include "Motherboard12.h"
+#include "Motherboard.h"
 
 
 /*
@@ -17,7 +14,7 @@ class Cycle{
     Cycle();
     
     // Motherboard
-    Motherboard12 *device;
+    Motherboard *device;
     
     enum ClockMode { Leading = 0, Following = 1 };
     ClockMode clockMode = Leading;
@@ -68,22 +65,18 @@ class Cycle{
     void updateAllNotes();
     void sendNoteOn(byte note);
     void sendNoteOff(byte note);
+    void sendCC(byte value);
     void sendStart();
     void sendStop();
-    
-    // Midi callbacks
-    static void onClock();
-    static void onSongPosition(unsigned beats);
-    static void onStart();
-    static void onStop();
+    void onStepIncrement();
     
     // Controls callbacks
     // Notes
-    static void onNoteChange(byte inputIndex, unsigned int value, int diffToPrevious);
+    static void onNoteChange(byte inputIndex, float value, int diffToPrevious);
     // Clock
     static void onClockShortPress(byte inputIndex);
     static void onClockLongPress(byte inputIndex);
-    static void onClockChange(bool value);
+    static void onClockChange(byte inputIndex, bool value);
     // Direction
     static void onDirectionPress(byte inputIndex);
     // Scale
@@ -91,7 +84,16 @@ class Cycle{
     // Octave
     static void onOctavePress(byte inputIndex);
     
-    void onStepIncrement();
+    // Midi callbacks
+    static void onMidiNoteChange(byte channel, byte control, byte value);
+    static void onMidiClockChange(byte channel, byte control, byte value);
+    static void onMidiDirectionChange(byte channel, byte control, byte value);
+    static void onMidiScaleChange(byte channel, byte control, byte value);
+    static void onMidiOctaveChange(byte channel, byte control, byte value);
+    static void onMidiClock();
+    static void onMidiSongPosition(unsigned beats);
+    static void onMidiStart();
+    static void onMidiStop();
 };
 
 // Singleton pre init
@@ -101,7 +103,6 @@ Cycle * Cycle::instance = nullptr;
  * Constructor
  */
 inline Cycle::Cycle(){
-  this->device = Motherboard12::getInstance();
   this->display = new Display();
   this->setTempo(60);
 
@@ -133,16 +134,15 @@ inline Cycle *Cycle::getInstance()    {
  * Init
  */
 inline void Cycle::init(){
-  // 0 = empty, 1 = button, 2 = potentiometer, 3 = encoder
-  byte controls[12] = {2,2,2,2, 2,2,2,2, 3,1,1,1};
-  this->device->init(controls);
-  
-  // Midi callbacks
-  MIDI.setHandleSongPosition(onSongPosition);
-  MIDI.setHandleClock(onClock);
-  MIDI.setHandleStart(onStart);
-  MIDI.setHandleStop(onStop);
-  MIDI.begin(this->device->getMidiChannel());
+  // Motherboard init
+  this->device = Motherboard::init(
+    "CYCLE",
+    {
+      Potentiometer, Potentiometer, Potentiometer, Potentiometer,
+      Potentiometer, Potentiometer, Potentiometer, Potentiometer,
+      RotaryEncoder,        Button,        Button,        Button
+    }
+  );
   
   // Device callbacks
   this->device->setHandlePotentiometerChange(0, onNoteChange);
@@ -159,13 +159,24 @@ inline void Cycle::init(){
   this->device->setHandlePressUp(9, onDirectionPress);
   this->device->setHandlePressUp(10, onScalePress);
   this->device->setHandlePressUp(11, onOctavePress);
+
+  // MIDI callbacks
+  device->setHandleMidiControlChange(0, 0, "Note 1", onMidiNoteChange);
+  device->setHandleMidiControlChange(0, 1, "Note 2", onMidiNoteChange);
+  device->setHandleMidiControlChange(0, 2, "Note 3", onMidiNoteChange);
+  device->setHandleMidiControlChange(0, 3, "Note 4", onMidiNoteChange);
+  device->setHandleMidiControlChange(0, 4, "Note 5", onMidiNoteChange);
+  device->setHandleMidiControlChange(0, 5, "Note 6", onMidiNoteChange);
+  device->setHandleMidiControlChange(0, 6, "Note 7", onMidiNoteChange);
+  device->setHandleMidiControlChange(0, 7, "Note 8", onMidiNoteChange);
+  device->setHandleMidiControlChange(0, 8, "Clock",  onMidiClockChange);
+  device->setHandleMidiControlChange(0, 9, "Direction", onMidiDirectionChange);
+  device->setHandleMidiControlChange(0, 10, "Scale", onMidiScaleChange);
+  device->setHandleMidiControlChange(0, 11, "Octave", onMidiOctaveChange);
 }
 
 inline void Cycle::update(){
   this->device->update();
-  
-  MIDI.read(this->device->getMidiChannel());
-//  usbMIDI.read(this->device->getMidiChannel());
   
   switch(this->display->getCurrentDisplayMode()){
     case DisplayMode::Sequencer:
@@ -368,6 +379,11 @@ inline void Cycle::sendNoteOff(byte note){
   usbMIDI.sendNoteOff(note, 127, this->device->getMidiChannel());
 }
 
+inline void Cycle::sendCC(byte value){
+  MIDI.sendControlChange(0, value, this->device->getMidiChannel()); // TODO be able to configure the control number
+  usbMIDI.sendControlChange(0, value, this->device->getMidiChannel());
+}
+
 inline void Cycle::sendStart(){
   MIDI.sendStart();
 }
@@ -444,7 +460,7 @@ inline byte Cycle::getDirectionIndex(){
 /**
  * Midi clock callback
  */
-inline void Cycle::onClock(){
+inline void Cycle::onMidiClock(){
   switch(getInstance()->clockMode){
     case ClockMode::Following:
 
@@ -481,7 +497,7 @@ inline void Cycle::onClock(){
 /**
  * Midi Song position callback
  */
-inline void Cycle::onSongPosition(unsigned songPosition){
+inline void Cycle::onMidiSongPosition(unsigned songPosition){
   switch(getInstance()->clockMode){
     case ClockMode::Following:
       if(songPosition == 0){
@@ -501,7 +517,7 @@ inline void Cycle::onSongPosition(unsigned songPosition){
 /**
  * Midi Start callback
  */
-inline void Cycle::onStart(){
+inline void Cycle::onMidiStart(){
   switch(getInstance()->clockMode){
     case ClockMode::Following:
       Serial.println("onStart");
@@ -515,7 +531,7 @@ inline void Cycle::onStart(){
 /**
  * Midi Stop callback
  */
-inline void Cycle::onStop(){
+inline void Cycle::onMidiStop(){
   switch(getInstance()->clockMode){
     case ClockMode::Following:
       Serial.println("onStop");
@@ -530,25 +546,65 @@ inline void Cycle::onStop(){
 /**
  * On note change 
  */
-inline void Cycle::onNoteChange(byte inputIndex, unsigned int value, int diffToPrevious){  
+inline void Cycle::onNoteChange(byte inputIndex, float value, int diffToPrevious){
   if(value == 0){
     getInstance()->notes[inputIndex] = 0;
   }else{
-    byte mapNote = map(value, getInstance()->device->getAnalogMinValue(), getInstance()->device->getAnalogMaxValue(), 0, 24);
-    byte noteOctave = mapNote / 12;
-    byte note = 12 * getInstance()->octave + 12 * noteOctave + getInstance()->scales[getInstance()->scale][mapNote % 12];
-    
-    // If the sequencer is not playing and a step has changed
-    if(!getInstance()->isPlaying && note != getInstance()->notes[inputIndex] && !getInstance()->activeNotes[inputIndex]){
-      // Play the note
-      getInstance()->sendNoteOn(note);
-      getInstance()->activeNotes[inputIndex] = true;
-      getInstance()->display->setCursor(mapNote%12);
-      getInstance()->display->setCurrentDisplay(DisplayMode::NoteChange);
+    switch(getInstance()->scale){
+      // MIDI CC mode
+      case 7:
+      {
+        byte midiCC = map(value, getInstance()->device->getAnalogMinValue(), getInstance()->device->getAnalogMaxValue(), 0, 127);
+        getInstance()->notes[inputIndex] = midiCC;
+        
+        // If the sequencer is not playing and a step has changed
+        if(!getInstance()->isPlaying && midiCC != getInstance()->notes[inputIndex] && !getInstance()->activeNotes[inputIndex]){
+          // Send the MIDI CC message
+          getInstance()->sendCC(midiCC);
+          getInstance()->activeNotes[inputIndex] = true;
+        }
+      }
+      break;
+
+      // Default mode
+      default:
+      {
+        byte mapNote = map(value, getInstance()->device->getAnalogMinValue(), getInstance()->device->getAnalogMaxValue(), 0, 24);
+        byte noteOctave = mapNote / 12;
+        byte note = 12 * getInstance()->octave + 12 * noteOctave + getInstance()->scales[getInstance()->scale][mapNote % 12];
+        
+        // If the sequencer is not playing and a step has changed
+        if(!getInstance()->isPlaying && note != getInstance()->notes[inputIndex] && !getInstance()->activeNotes[inputIndex]){
+          // Play the note
+          getInstance()->sendNoteOn(note);
+          getInstance()->activeNotes[inputIndex] = true;
+          getInstance()->display->setCursor(mapNote%12);
+          getInstance()->display->setCurrentDisplay(DisplayMode::NoteChange);
+        }
+        getInstance()->notes[inputIndex] = note;
+      }
+      break;
     }
-    getInstance()->notes[inputIndex] = note;
   }
 }
+
+/**
+ * On MIDI Note Change
+ */
+void Cycle::onMidiNoteChange(byte channel, byte control, byte value){
+  byte noteIndex = constrain(control, 0, 7);
+  
+  unsigned int mapValue = map(
+    value, 
+    0,
+    127,
+    getInstance()->device->getAnalogMinValue(), 
+    getInstance()->device->getAnalogMaxValue()
+  );
+  
+  getInstance()->onNoteChange(noteIndex, mapValue, 255);
+}
+
 
 /**
  * On Clock short press 
@@ -595,7 +651,7 @@ inline void Cycle::onClockLongPress(byte inputIndex){
 /**
  * On Clock change 
  */
-inline void Cycle::onClockChange(bool value){
+inline void Cycle::onClockChange(byte inputIndex, bool value){
   int inValue = 1;
   if(!value){
     inValue = -1;
@@ -641,6 +697,14 @@ inline void Cycle::onClockChange(bool value){
   }
 }
 
+/**
+ * On MIDI Clock Change
+ */
+void Cycle::onMidiClockChange(byte channel, byte control, byte value){
+  byte mapValue = map(value, 0, 127, 0, 255);
+  getInstance()->setTempo(mapValue);
+}
+
 
 /**
  * On Direction press 
@@ -665,6 +729,16 @@ inline void Cycle::onDirectionPress(byte inputIndex){
 }
 
 /**
+ * On MIDI Direction Change
+ */
+void Cycle::onMidiDirectionChange(byte channel, byte control, byte value){
+  byte mapValue = map(value, 0, 127, 0, 7);
+  getInstance()->display->setCurrentDisplay(DisplayMode::Direction);
+  getInstance()->direction = Direction(mapValue);
+  getInstance()->display->setCursor(getInstance()->getDirectionIndex());
+}
+
+/**
  * On Scale press 
  */
 inline void Cycle::onScalePress(byte inputIndex){
@@ -677,6 +751,7 @@ inline void Cycle::onScalePress(byte inputIndex){
     case DisplayMode::Scale:
     {
       getInstance()->scale = (getInstance()->scale + 1) % 8;
+      getInstance()->updateAllNotes();
       getInstance()->display->setCursor(getInstance()->scale);
       getInstance()->display->keepCurrentDisplay();
     }
@@ -684,6 +759,17 @@ inline void Cycle::onScalePress(byte inputIndex){
     default:
     break;
   }
+}
+
+/**
+ * On MIDI Scale Change
+ */
+void Cycle::onMidiScaleChange(byte channel, byte control, byte value){
+  byte mapValue = map(value, 0, 127, 0, 7);
+  getInstance()->display->setCurrentDisplay(DisplayMode::Scale);
+  getInstance()->scale = mapValue;
+  getInstance()->updateAllNotes();
+  getInstance()->display->setCursor(getInstance()->scale);
 }
 
 /**
@@ -697,15 +783,36 @@ inline void Cycle::onOctavePress(byte inputIndex){
     break; 
     
     case DisplayMode::Octave:
-      getInstance()->octave = (getInstance()->octave + 1) % 8;
-      getInstance()->updateAllNotes();
-      getInstance()->display->setCursor(getInstance()->octave);
-      getInstance()->display->keepCurrentDisplay();
+      switch(getInstance()->scale){
+          // MIDI CC mode
+        case 7:
+          // Octave not doing anything in this case
+        break;
+        
+        // Default mode
+        default:
+          getInstance()->octave = (getInstance()->octave + 1) % 8;
+          getInstance()->updateAllNotes();
+          getInstance()->display->setCursor(getInstance()->octave);
+          getInstance()->display->keepCurrentDisplay();
+        break;
+      }
     break;
        
     default:
     break;
   }
+}
+
+/**
+ * On MIDI Octave Change
+ */
+void Cycle::onMidiOctaveChange(byte channel, byte control, byte value){
+  byte mapValue = map(value, 0, 127, 0, 7);
+  getInstance()->display->setCurrentDisplay(DisplayMode::Octave);
+  getInstance()->octave = mapValue;
+  getInstance()->updateAllNotes();
+  getInstance()->display->setCursor(getInstance()->octave);
 }
 
 inline void Cycle::onStepIncrement(){
@@ -742,14 +849,27 @@ inline void Cycle::onStepIncrement(){
       }
 
       if(!temporaryMute){
-        if(noteToPlay > 0){
-          this->sendNoteOff(this->previousNotePlayed);
-          this->sendNoteOn(noteToPlay);
-          this->previousNotePlayed = noteToPlay;
-          this->activeNotes[this->currentStep] = true;
-        }else{
-          this->sendNoteOff(noteToPlay);
-          this->activeNotes[this->currentStep] = false;
+        switch(getInstance()->scale){
+          // MIDI CC mode
+          case 7:
+            if(noteToPlay > 0){
+              this->sendCC(noteToPlay);
+              this->activeNotes[this->currentStep] = true;
+            }
+          break;
+  
+          // Default mode
+          default:
+            if(noteToPlay > 0){
+              this->sendNoteOff(this->previousNotePlayed);
+              this->sendNoteOn(noteToPlay);
+              this->previousNotePlayed = noteToPlay;
+              this->activeNotes[this->currentStep] = true;
+            }else{
+              this->sendNoteOff(noteToPlay);
+              this->activeNotes[this->currentStep] = false;
+            }
+          break;
         }
       }
     }
@@ -784,11 +904,11 @@ inline void Cycle::updateAllNotes(){
       note = 12 * this->octave + 12 * noteOctave + this->scales[this->scale][note % 12];
       
       // If the sequencer is not playing and a step has changed
-      if(!this->isPlaying && note != this->notes[i] && !this->activeNotes[i]){
-        // Play the note
-        this->sendNoteOn(note);
-        this->activeNotes[i] = true;
-      }
+//      if(!this->isPlaying && note != this->notes[i] && !this->activeNotes[i]){
+//        // Play the note
+//        this->sendNoteOn(note);
+//        this->activeNotes[i] = true;
+//      }
       this->notes[i] = note;
     }
   }

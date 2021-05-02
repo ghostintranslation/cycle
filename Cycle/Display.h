@@ -1,7 +1,7 @@
 #ifndef Display_h
 #define Display_h
 
-#include "Motherboard12.h"
+#include "Motherboard.h"
 
 enum DisplayMode { Clock, ClockDivision, Sequencer, Direction, Scale, Octave, NoteChange };
 
@@ -10,7 +10,7 @@ enum DisplayMode { Clock, ClockDivision, Sequencer, Direction, Scale, Octave, No
  */
 class Display {
   private:
-    Motherboard12 *device;
+    Motherboard *device;
     DisplayMode currentDisplay;
     byte cursorIndex = 0;
     byte data[3];
@@ -41,7 +41,7 @@ class Display {
  * Constructor
  */
 inline Display::Display() {
-  this->device = Motherboard12::getInstance();
+  this->device = Motherboard::getInstance();
   this->currentDisplay = Sequencer;
 }
 

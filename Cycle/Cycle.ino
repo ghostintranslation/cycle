@@ -4,9 +4,10 @@
 \_|| |\_/__) |    _|_| |    | | \| || |__)|__| | | _|_\_/| |
 
 CYCLE
-v1.1.0
+v1.2.0
 
-If you enjoy my work and music please consider donating.
+Support my work:
+https://www.paypal.com/paypalme/ghostintranslation
 
 https://www.ghostintranslation.com/
 https://ghostintranslation.bandcamp.com/
@@ -23,10 +24,10 @@ Cycle * cycle = Cycle::getInstance();
 void setup() {
   Serial.begin(115200);
   
+  while (!Serial && millis() < 2500); // wait for serial monitor
+  
   cycle->init();
   
-  while (!Serial && millis() < 2500); // wait for serial monitor
-
   // Starting sequence
   Serial.println("Ready!");
 }
